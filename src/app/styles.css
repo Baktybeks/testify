@@ -339,11 +339,13 @@ fieldset {
 }
 .filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 12px;
 }
 .filters label {
-  min-width: 220px;
+  min-width: 200px;
+  flex: 1;
 }
 .stats {
   display: grid;

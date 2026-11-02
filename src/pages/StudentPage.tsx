@@ -21,6 +21,7 @@ export function StudentPage({ user }: { user: string }) {
     refetchInterval: 15000,
   });
   const [current, setCurrent] = useState<Current | null>(null),
+    [subjectId, setSubjectId] = useState(""),
     [selected, setSelected] = useState(""),
     [pending, setPending] = useState(false),
     [error, setError] = useState(""),
@@ -126,8 +127,31 @@ export function StudentPage({ user }: { user: string }) {
         <span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span>
         <h1>Твои экзамены</h1>
         <p className="muted">
-          Выбери модуль. Правила и время указаны на карточке.
+          Выбери экзамен. Дисциплина, модуль и правила указаны на карточке.
         </p>
+        {!!modules.data?.length && (
+          <label>
+            Дисциплина
+            <select
+              aria-label="Дисциплина"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+            >
+              <option value="">Все дисциплины</option>
+              {Array.from(
+                new Map(
+                  modules.data
+                    .filter((m) => m.subject_id)
+                    .map((m) => [m.subject_id!, m.subject_name]),
+                ).entries(),
+              ).map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {modules.error && (
           <div className="alert">
             {modules.error.message}
@@ -147,50 +171,55 @@ export function StudentPage({ user }: { user: string }) {
           </div>
         ) : (
           <div className="module-grid">
-            {modules.data.map((m) => (
-              <article className="card module-card" key={m.id}>
-                <span className="pill">
-                  {m.attempt_status === "finished"
-                    ? "Завершён"
-                    : m.available
-                      ? "Доступен"
-                      : "Приём закрыт"}
-                </span>
-                <h2>{m.title}</h2>
-                <div className="module-facts">
-                  <span>
-                    <b>{m.question_count}</b> вопросов
+            {modules.data
+              .filter((m) => !subjectId || m.subject_id === subjectId)
+              .map((m) => (
+                <article className="card module-card" key={m.id}>
+                  <span className="pill">
+                    {m.attempt_status === "finished"
+                      ? "Завершён"
+                      : m.available
+                        ? "Доступен"
+                        : "Приём закрыт"}
                   </span>
-                  <span>
-                    <b>{m.seconds_per_question} сек.</b> на вопрос
-                  </span>
-                  <span>
-                    <b>{Math.round(m.total_seconds / 60)} мин.</b> всего
-                  </span>
-                </div>
-                <p className="muted">
-                  Одна попытка. Вернуться к предыдущему вопросу нельзя. После
-                  старта время идёт даже при закрытой вкладке.
-                </p>
-                <button
-                  className="primary full"
-                  disabled={pending || (!m.available && !m.attempt_id)}
-                  onClick={() =>
-                    void execute(() =>
-                      rpc<Current>("attempt_start_or_resume", {
-                        p_module_id: m.id,
-                      }),
-                    )
-                  }
-                >
-                  {m.attempt_status === "finished"
-                    ? "Посмотреть результат"
-                    : m.attempt_id
-                      ? "Продолжить"
-                      : "Начать экзамен →"}
-                </button>
-              </article>
-            ))}
+                  <p className="eyebrow catalog-path">
+                    {m.subject_name} · {m.course_module_title}
+                  </p>
+                  <h2>{m.title}</h2>
+                  <div className="module-facts">
+                    <span>
+                      <b>{m.question_count}</b> вопросов
+                    </span>
+                    <span>
+                      <b>{m.seconds_per_question} сек.</b> на вопрос
+                    </span>
+                    <span>
+                      <b>{Math.round(m.total_seconds / 60)} мин.</b> всего
+                    </span>
+                  </div>
+                  <p className="muted">
+                    Одна попытка. Вернуться к предыдущему вопросу нельзя. После
+                    старта время идёт даже при закрытой вкладке.
+                  </p>
+                  <button
+                    className="primary full"
+                    disabled={pending || (!m.available && !m.attempt_id)}
+                    onClick={() =>
+                      void execute(() =>
+                        rpc<Current>("attempt_start_or_resume", {
+                          p_module_id: m.id,
+                        }),
+                      )
+                    }
+                  >
+                    {m.attempt_status === "finished"
+                      ? "Посмотреть результат"
+                      : m.attempt_id
+                        ? "Продолжить"
+                        : "Начать экзамен →"}
+                  </button>
+                </article>
+              ))}
           </div>
         )}
       </main>
@@ -217,6 +246,9 @@ export function StudentPage({ user }: { user: string }) {
         <section className="card finish">
           <span className="finish-icon">✓</span>
           <span className="eyebrow">{current.title}</span>
+          <p className="muted">
+            {current.subject_name} · {current.course_module_title}
+          </p>
           <h1>Тест завершён</h1>
           {current.published ? (
             <>
@@ -247,7 +279,11 @@ export function StudentPage({ user }: { user: string }) {
       ) : (
         <section className="card exam-card">
           <div className="exam-meta">
-            <span className="eyebrow">{current.title}</span>
+            <span className="eyebrow">
+              {current.subject_name} · {current.course_module_title}
+              <br />
+              {current.title}
+            </span>
             <span className="muted">
               Общее время{" "}
               <b>

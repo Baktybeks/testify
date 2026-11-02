@@ -58,6 +58,10 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
         {
           id: "m1",
           title: "Growing Landing",
+          subject_id: "web",
+          subject_name: "Web-разработка",
+          course_module_id: "web1",
+          course_module_title: "Модуль 1",
           status: "open",
           question_count: 20,
           seconds_per_question: 30,

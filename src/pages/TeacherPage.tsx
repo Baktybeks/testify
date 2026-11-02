@@ -8,6 +8,7 @@ import {
   validateQuestions,
 } from "../features/files";
 import type { AdminData, Module, Question } from "../entities/types";
+import { CatalogManager } from "../features/CatalogManager";
 const status: Record<string, string> = {
   draft: "Черновик",
   open: "Открыт",
@@ -18,7 +19,8 @@ const status: Record<string, string> = {
   finished: "Завершён",
 };
 const blankModule = {
-  title: "Growing Landing — Модуль №1",
+  title: "Новая партия",
+  course_module_id: "",
   question_count: 20,
   seconds_per_question: 30,
   total_seconds: 600,
@@ -43,6 +45,8 @@ function date(v: string | null) {
 export function TeacherPage({ user }: { user: string }) {
   const cache = useQueryClient();
   const [tab, setTab] = useState("Обзор"),
+    [subjectId, setSubjectId] = useState(""),
+    [courseModuleId, setCourseModuleId] = useState(""),
     [mid, setMid] = useState(""),
     [gid, setGid] = useState(""),
     [search, setSearch] = useState(""),
@@ -97,6 +101,7 @@ export function TeacherPage({ user }: { user: string }) {
     setEditing(m.id);
     setModuleForm({
       title: m.title,
+      course_module_id: m.course_module_id || "",
       question_count: m.question_count,
       seconds_per_question: m.seconds_per_question,
       total_seconds: m.total_seconds,
@@ -174,10 +179,42 @@ export function TeacherPage({ user }: { user: string }) {
         <button onClick={() => void data.refetch()}>Повторить</button>
       </main>
     );
-  const d = data.data;
+  const all = data.data;
+  const visibleModules = all.modules.filter(
+    (m) =>
+      (!subjectId || m.subject_id === subjectId) &&
+      (!courseModuleId || m.course_module_id === courseModuleId),
+  );
+  const visibleIds = new Set(visibleModules.map((m) => m.id));
+  const attempts = all.attempts.filter((a) => visibleIds.has(a.module_id));
+  const finished = attempts.filter((a) => a.status === "finished");
+  const scores = finished.filter((a) => a.score !== null);
+  const d = {
+    ...all,
+    modules: visibleModules,
+    attempts,
+    stats: {
+      ...all.stats,
+      started: attempts.length,
+      active: attempts.length - finished.length,
+      finished: finished.length,
+      average: scores.length
+        ? Number(
+            (
+              scores.reduce((n, a) => n + Number(a.score), 0) / scores.length
+            ).toFixed(2),
+          )
+        : null,
+    },
+  };
+  const subjects = all.subjects || [],
+    courseModules = all.course_modules || [];
   const resultRows: unknown[][] = [
     [
       "Студент",
+      "Дисциплина",
+      "Модуль",
+      "Экзамен",
       "Группа",
       "Статус",
       "Вопрос",
@@ -188,6 +225,9 @@ export function TeacherPage({ user }: { user: string }) {
     ],
     ...d.attempts.map((a) => [
       a.full_name,
+      all.modules.find((m) => m.id === a.module_id)?.subject_name,
+      all.modules.find((m) => m.id === a.module_id)?.course_module_title,
+      all.modules.find((m) => m.id === a.module_id)?.title,
       a.group_id,
       status[a.status],
       a.current_index,
@@ -214,28 +254,81 @@ export function TeacherPage({ user }: { user: string }) {
         </button>
       </div>
       <nav className="tabs" aria-label="Разделы">
-        {["Обзор", "Модули", "Группы", "Студенты", "Вопросы", "Результаты"].map(
-          (t) => (
-            <button
-              key={t}
-              className={tab === t ? "active" : ""}
-              onClick={() => {
-                setTab(t);
-                setIssues([]);
-                setPreview([]);
-                setStudentRows([]);
-                setGroupRows([]);
-              }}
-            >
-              {t}
-            </button>
-          ),
-        )}
+        {[
+          "Обзор",
+          "Дисциплины",
+          "Экзамены",
+          "Группы",
+          "Студенты",
+          "Вопросы",
+          "Результаты",
+        ].map((t) => (
+          <button
+            key={t}
+            className={tab === t ? "active" : ""}
+            onClick={() => {
+              setTab(t);
+              setIssues([]);
+              setPreview([]);
+              setStudentRows([]);
+              setGroupRows([]);
+            }}
+          >
+            {t}
+          </button>
+        ))}
       </nav>
       <div className="filters">
         <label>
+          Дисциплина
+          <select
+            aria-label="Дисциплина"
+            value={subjectId}
+            onChange={(e) => {
+              setSubjectId(e.target.value);
+              setCourseModuleId("");
+              setMid("");
+              setPreview([]);
+              setQuestion(blankQuestion);
+            }}
+          >
+            <option value="">Все дисциплины</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Модуль
           <select
+            aria-label="Модуль"
+            value={courseModuleId}
+            onChange={(e) => {
+              setCourseModuleId(e.target.value);
+              setMid("");
+              setPreview([]);
+              setQuestion(blankQuestion);
+            }}
+          >
+            <option value="">Все учебные модули</option>
+            {courseModules
+              .filter((c) => !subjectId || c.subject_id === subjectId)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {!subjectId
+                    ? subjects.find((s) => s.id === c.subject_id)?.name + " · "
+                    : ""}
+                  {c.title}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          Экзамен
+          <select
+            aria-label="Экзамен"
             value={mid}
             onChange={(e) => {
               setMid(e.target.value);
@@ -243,7 +336,7 @@ export function TeacherPage({ user }: { user: string }) {
               setQuestion(blankQuestion);
             }}
           >
-            <option value="">Все модули</option>
+            <option value="">Все экзамены</option>
             {d.modules.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.title} · {status[m.status]}
@@ -291,7 +384,7 @@ export function TeacherPage({ user }: { user: string }) {
             ))}
           </div>
           <section className="card">
-            <h2>Текущие модули</h2>
+            <h2>Текущие экзамены</h2>
             {!d.modules.length ? (
               <p className="muted">
                 Создайте первый модуль, добавьте вопросы и разрешите доступ
@@ -301,6 +394,10 @@ export function TeacherPage({ user }: { user: string }) {
               d.modules.map((m) => (
                 <div className="module-row" key={m.id}>
                   <div>
+                    <small>
+                      {m.subject_name} · {m.course_module_title}
+                    </small>
+                    <br />
                     <b>{m.title}</b>
                     <p className="muted">
                       {m.question_count} вопросов · {m.seconds_per_question}{" "}
@@ -321,10 +418,20 @@ export function TeacherPage({ user }: { user: string }) {
           </p>
         </>
       )}
-      {tab === "Модули" && (
+      {tab === "Дисциплины" && (
+        <CatalogManager
+          subjects={subjects}
+          course_modules={courseModules}
+          busy={busy}
+          save={(action, payload) => void run(() => command(action, payload))}
+        />
+      )}
+      {tab === "Экзамены" && (
         <>
           <section className="card">
-            <h2>{editing ? "Настройки черновика" : "Новый модуль"}</h2>
+            <h2>
+              {editing ? "Настройки черновика" : "Новый экзамен / партия"}
+            </h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -336,14 +443,43 @@ export function TeacherPage({ user }: { user: string }) {
                     module_id: editing || null,
                   })) as { module_id: string };
                   setMid(result.module_id);
+                  setSubjectId("");
+                  setCourseModuleId("");
                   setEditing("");
                   setModuleForm(blankModule);
                 });
               }}
             >
               <div className="fields">
+                <label>
+                  Дисциплина и модуль экзамена
+                  <select
+                    required
+                    aria-label="Дисциплина и модуль экзамена"
+                    value={moduleForm.course_module_id}
+                    onChange={(e) =>
+                      setModuleForm({
+                        ...moduleForm,
+                        course_module_id: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Выберите учебный модуль</option>
+                    {subjects.map((s) => (
+                      <optgroup key={s.id} label={s.name}>
+                        {courseModules
+                          .filter((c) => c.subject_id === s.id)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {s.name} · {c.title}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
                 <label className="span2">
-                  Название
+                  Название экзамена / партии
                   <input
                     required
                     maxLength={200}
@@ -431,6 +567,9 @@ export function TeacherPage({ user }: { user: string }) {
           </section>
           {d.modules.map((m) => (
             <section className="card" key={m.id}>
+              <p className="eyebrow">
+                {m.subject_name} · {m.course_module_title}
+              </p>
               <div className="space">
                 <h2>{m.title}</h2>
                 <span className="pill">{status[m.status]}</span>
@@ -910,15 +1049,19 @@ export function TeacherPage({ user }: { user: string }) {
       {tab === "Вопросы" &&
         (!mid ? (
           <section className="card empty">
-            Выберите модуль для работы с банком.
+            Выберите экзамен для работы с его банком вопросов.
           </section>
         ) : (
           <>
             <section className="card">
               <h2>Банк вопросов · {bank.data?.length || 0}</h2>
+              <p className="eyebrow">
+                {selected?.subject_name} → {selected?.course_module_title} →{" "}
+                {selected?.title}
+              </p>
               <p className="muted">
                 Размер банка произвольный. Изменения доступны в черновике; для
-                следующей партии скопируйте модуль.
+                следующей партии скопируйте экзамен.
               </p>
               <label>
                 Импорт CSV / XLSX (лист Questions)
@@ -1162,30 +1305,7 @@ export function TeacherPage({ user }: { user: string }) {
             </button>
             <button
               className="secondary"
-              onClick={() =>
-                downloadCsv("results.csv", [
-                  [
-                    "Студент",
-                    "Группа",
-                    "Статус",
-                    "Вопрос",
-                    "Начало",
-                    "Завершение",
-                    "Правильно",
-                    "Балл",
-                  ],
-                  ...d.attempts.map((a) => [
-                    a.full_name,
-                    a.group_id,
-                    status[a.status],
-                    a.current_index,
-                    date(a.started_at),
-                    date(a.finished_at),
-                    a.correct_count,
-                    a.score,
-                  ]),
-                ])
-              }
+              onClick={() => downloadCsv("results.csv", resultRows)}
             >
               Экспорт CSV
             </button>
@@ -1195,6 +1315,7 @@ export function TeacherPage({ user }: { user: string }) {
               <thead>
                 <tr>
                   <th>Студент</th>
+                  <th>Экзамен</th>
                   <th>Группа</th>
                   <th>Статус</th>
                   <th>Прогресс</th>
@@ -1207,6 +1328,20 @@ export function TeacherPage({ user }: { user: string }) {
                 {d.attempts.map((a) => (
                   <tr key={a.id}>
                     <td>{a.full_name}</td>
+                    <td>
+                      {all.modules.find((m) => m.id === a.module_id)?.title}
+                      <small>
+                        {
+                          all.modules.find((m) => m.id === a.module_id)
+                            ?.subject_name
+                        }{" "}
+                        ·{" "}
+                        {
+                          all.modules.find((m) => m.id === a.module_id)
+                            ?.course_module_title
+                        }
+                      </small>
+                    </td>
                     <td>{a.group_id}</td>
                     <td>
                       <span className="pill">{status[a.status]}</span>

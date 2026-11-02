@@ -20,6 +20,76 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("subject catalog: independent modules, bank copies and role boundaries", async () => {
+  await as(teacher);
+  const catalog = await call("admin_data");
+  assert.equal(catalog.subjects.length, 2);
+  assert.equal(catalog.course_modules.length, 4);
+  const web = catalog.subjects.find((s) => s.name === "Web-разработка"),
+    ux = catalog.subjects.find((s) => s.name === "UX/UI");
+  const web1 = catalog.course_modules.find(
+      (c) => c.subject_id === web.id && c.position === 1,
+    ),
+    ux2 = catalog.course_modules.find(
+      (c) => c.subject_id === ux.id && c.position === 2,
+    );
+  const source = await module();
+  await as(teacher);
+  const { module_id: copy } = await command("copy_module", {
+    module_id: source,
+    course_module_id: ux2.id,
+  });
+  const data = await call("admin_data");
+  assert.equal(
+    data.modules.find((m) => m.id === source).course_module_id,
+    web1.id,
+  );
+  assert.equal(data.modules.find((m) => m.id === copy).subject_name, "UX/UI");
+  assert.equal((await call("admin_questions", [copy])).length, 90);
+  await command("save_questions", {
+    module_id: copy,
+    questions: [
+      {
+        external_id: "Q0",
+        lecture: "UX",
+        text: "Independent UX question",
+        options: ["one", "two", "three", "four"],
+        correct: 1,
+        active: true,
+      },
+    ],
+  });
+  assert.notEqual(
+    (await call("admin_questions", [source]))[0].text,
+    "Independent UX question",
+  );
+  const { subject_id: newSubject } = await command("save_subject", {
+    name: "Дизайн",
+  });
+  await command("save_course_module", {
+    subject_id: newSubject,
+    title: "Модуль 3",
+    position: 3,
+  });
+  await assert.rejects(() =>
+    command("save_subject", { name: "web-разработка" }),
+  );
+  await assert.rejects(
+    () =>
+      command("save_course_module", {
+        id: ux2.id,
+        subject_id: web.id,
+        title: "Модуль 2",
+        position: 2,
+      }),
+    /переносить/,
+  );
+  await as(student);
+  await assert.rejects(
+    () => command("save_subject", { name: "Forbidden" }),
+    /преподавателя/,
+  );
+});
 async function as(id) {
   await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [id]);
 }

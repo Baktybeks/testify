@@ -21,6 +21,10 @@
 | admin_questions | `{p_module_id:uuid}` | Вопросы банка, включая правильные ответы; только teacher |
 | admin_command | `{p_action:string,p_data:object}` | `{ok:true,module_id:uuid|null}` |
 
+Названия RPC сохранены для совместимости: `module_id` — конкретный экзамен/партия. Поля `course_module_id`, `course_module_title`, `subject_id`, `subject_name` в карточках экзаменов обозначают учебный модуль и дисциплину. Current также содержит метаданные дисциплины/учебного модуля. admin_data дополнительно возвращает массивы `subjects:[{id,name}]` и `course_modules:[{id,subject_id,title,position}]`. Фильтры дисциплины и учебного модуля применяются в панели к разрешённым преподавателю данным; результаты по конкретному экзамену/группе фильтрует сервер.
+
+Дополнительные команды: `save_subject` с `{id?:uuid,name}` и `save_course_module` с `{id?:uuid,subject_id,title,position}`. `save_module` и `copy_module` принимают `course_module_id`. Новая форма требует явный выбор, старые клиенты сохраняют прежнюю связь либо получают Web-разработка → Модуль 1 по умолчанию. Перенос учебного модуля между дисциплинами запрещён; создайте новый учебный модуль. Копирование экзамена в другой учебный модуль явно задаётся через course_module_id.
+
 Current активной попытки: `{attempt_id,done:false,title,index,total,question,options:[{id,text}],server_now,question_deadline,attempt_deadline}`. Позиция API начинается с 1; в базе с 0. Завершённая: `{attempt_id,done:true,title,total,server_now,attempt_deadline,published}`. Только при published=true добавляются `{score,correct,max_score}`. Outcome: accepted либо expired_or_stale. Старая позиция не применяется к новому вопросу; UI обязан показать актуальный Current.
 
 Идемпотентность: повторите p_key и тот же payload, если подтверждение потерялось. Повтор с изменённым payload отклоняется. Ответ повторного вызова содержит **актуальное состояние попытки**, не старый снимок, и первоначальный outcome команды.

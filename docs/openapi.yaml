@@ -139,6 +139,8 @@ paths:
                       rename_student,
                       save_questions,
                       delete_question,
+                      save_subject,
+                      save_course_module,
                     ]
                 p_data: { type: object, additionalProperties: true }
       responses:
@@ -207,6 +209,8 @@ components:
               attempt_id: { type: string, format: uuid }
               done: { type: boolean }
               title: { type: string }
+              subject_name: { type: string }
+              course_module_title: { type: string }
               index: { type: integer, minimum: 1 }
               total: { type: integer }
               question: { type: string }

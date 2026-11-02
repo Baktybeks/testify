@@ -5,6 +5,10 @@ export type Profile = {
   active: boolean;
 };
 export type Module = {
+  course_module_id?: string;
+  course_module_title?: string;
+  subject_id?: string;
+  subject_name?: string;
   id: string;
   title: string;
   status: string;
@@ -19,6 +23,8 @@ export type Module = {
   attempt_status?: string;
 };
 export type Current = {
+  course_module_title?: string;
+  subject_name?: string;
   attempt_id: string;
   done: boolean;
   published?: boolean;
@@ -55,6 +61,7 @@ export type Question = {
   active: boolean;
 };
 export type Attempt = {
+  module_id: string;
   id: string;
   full_name: string;
   group_id: string;
@@ -67,6 +74,13 @@ export type Attempt = {
   score: number | null;
 };
 export type AdminData = {
+  subjects: { id: string; name: string }[];
+  course_modules: {
+    id: string;
+    subject_id: string;
+    title: string;
+    position: number;
+  }[];
   modules: Module[];
   groups: Group[];
   students: Student[];

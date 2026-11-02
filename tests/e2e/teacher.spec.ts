@@ -23,6 +23,10 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     max_score: 10,
     selection_mode: "random",
     quotas: {},
+    subject_id: "web",
+    subject_name: "Web-разработка",
+    course_module_id: "web1",
+    course_module_title: "Модуль 1",
   };
   await page.route(url + "/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -45,6 +49,14 @@ test("teacher dashboard, module settings and validated CSV import", async ({
       };
     else if (path.endsWith("/admin_data"))
       data = {
+        subjects: [
+          { id: "web", name: "Web-разработка" },
+          { id: "ux", name: "UX/UI" },
+        ],
+        course_modules: [
+          { id: "web1", subject_id: "web", title: "Модуль 1", position: 1 },
+          { id: "ux1", subject_id: "ux", title: "Модуль 1", position: 1 },
+        ],
         modules: [module],
         groups: [{ id: "G1", name: "ПИ-1-26" }],
         students: [],
@@ -76,11 +88,42 @@ test("teacher dashboard, module settings and validated CSV import", async ({
   await expect(
     page.getByRole("heading", { name: "Экзамены под контролем" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Модули", exact: true }).click();
-  await expect(page.getByLabel("Выбор вопросов")).toHaveValue("random");
-  await page.getByRole("button", { name: "Вопросы", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Дисциплина", exact: true })
+    .selectOption("ux");
+  await expect(
+    page
+      .getByRole("combobox", { name: "Экзамен", exact: true })
+      .getByRole("option", { name: /Новая партия/ }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Дисциплина", exact: true })
+    .selectOption("web");
   await page
     .getByRole("combobox", { name: "Модуль", exact: true })
+    .selectOption("web1");
+  await page.getByRole("button", { name: "Экзамены", exact: true }).click();
+  await expect(page.getByLabel("Выбор вопросов")).toHaveValue("random");
+  await page
+    .getByRole("combobox", {
+      name: "Дисциплина и модуль экзамена",
+      exact: true,
+    })
+    .selectOption("ux1");
+  await page.getByLabel("Название экзамена / партии").fill("UX/UI · партия 2");
+  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await expect
+    .poll(() =>
+      commands.some(
+        (c) =>
+          c.p_action === "save_module" &&
+          (c.p_data as { course_module_id: string }).course_module_id === "ux1",
+      ),
+    )
+    .toBeTruthy();
+  await page.getByRole("button", { name: "Вопросы", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Экзамен", exact: true })
     .selectOption("m1");
   const input = page.getByLabel("Импорт CSV / XLSX (лист Questions)");
   await input.setInputFiles({
