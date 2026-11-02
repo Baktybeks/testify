@@ -14,6 +14,7 @@ test("teacher dashboard, module settings and validated CSV import", async ({
   };
   const commands: Record<string, unknown>[] = [];
   const accounts: Record<string, unknown>[] = [];
+  let access: unknown[] = [];
   const module = {
     id: "m1",
     title: "Новая партия · 90 вопросов",
@@ -71,7 +72,7 @@ test("teacher dashboard, module settings and validated CSV import", async ({
           },
         ],
         attempts: [],
-        module_groups: [],
+        module_groups: access,
         stats: {
           students: 0,
           groups: 1,
@@ -82,13 +83,28 @@ test("teacher dashboard, module settings and validated CSV import", async ({
         },
       };
     else if (path.endsWith("/admin_questions")) data = [];
-    else if (path.endsWith("/admin_command")) {
+    else if (path.endsWith("/admin_open_exam_groups")) {
+      const body = route.request().postDataJSON();
+      commands.push({ p_action: "open_exam_groups", p_data: body });
+      module.status = "open";
+      access = body.p_group_ids.map((id: string) => ({
+        module_id: "m1",
+        group_id: id,
+        access: true,
+        window_start: null,
+        window_end: null,
+      }));
+      data = { ok: true, module_id: "m1" };
+    } else if (path.endsWith("/admin_command")) {
       commands.push(route.request().postDataJSON());
       data = { ok: true, module_id: "m1" };
     } else if (path.endsWith("/manage-account")) {
       const body = route.request().postDataJSON();
       accounts.push(body);
-      data = { id: body.id, code: body.password || "Random-test-2026!" };
+      data = {
+        id: body.id || "generated-student-id",
+        code: body.password || "Random-test-2026!",
+      };
     }
     await route.fulfill({ json: data });
   });
@@ -191,4 +207,49 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     page.getByLabel("Общий пароль для записей без password"),
   ).toHaveValue("");
   await expect(page.getByText("Уже существует — пропущен")).toBeVisible();
+  const manual = page
+    .getByRole("heading", { name: "Новый студент", exact: true })
+    .locator("..");
+  await expect(manual.getByLabel("StudentID", { exact: true })).toHaveCount(0);
+  await manual.getByLabel("ФИО", { exact: true }).fill("Новый студент");
+  await manual.getByLabel("Логин", { exact: true }).fill("manual_student");
+  await manual
+    .getByRole("combobox", { name: "Группа", exact: true })
+    .selectOption("G1");
+  await manual
+    .getByRole("button", { name: "Создать и выдать код", exact: true })
+    .click();
+  await expect.poll(() => accounts.length).toBe(3);
+  expect(accounts[2]).not.toHaveProperty("id");
+  await page.getByRole("button", { name: "Экзамены", exact: true }).click();
+  const open = page.getByRole("button", {
+    name: "Открыть экзамен для выбранных групп",
+    exact: true,
+  });
+  await expect(open).toBeDisabled();
+  await page.getByRole("checkbox", { name: "ПИ-1-26", exact: true }).check();
+  await expect(open).toBeEnabled();
+  await open.click();
+  await expect(
+    page.getByRole("group", { name: "Подтверждение открытия" }),
+  ).toContainText("Группы: ПИ-1-26");
+  await page
+    .getByRole("button", { name: "Подтвердить открытие", exact: true })
+    .click();
+  await expect(
+    page.getByText("Приём открыт: ПИ-1-26", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Закрыть приём", exact: true }),
+  ).toBeVisible();
+  expect(
+    commands.filter((c) => c.p_action === "open_exam_groups"),
+  ).toHaveLength(1);
+  expect(
+    (
+      commands.find((c) => c.p_action === "open_exam_groups")?.p_data as {
+        p_group_ids: string[];
+      }
+    ).p_group_ids,
+  ).toEqual(["G1"]);
 });

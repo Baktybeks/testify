@@ -19,6 +19,7 @@
 | attempt_submit_answer | `{p_attempt_id:uuid,p_position:int,p_option_id:uuid,p_key:uuid}` | Current + outcome |
 | admin_data | `{p_module_id:uuid|null,p_group_id:string|null}` | `{modules,groups,students,module_groups,attempts,stats}` |
 | admin_questions | `{p_module_id:uuid}` | Вопросы банка, включая правильные ответы; только teacher |
+| admin_open_exam_groups | `{p_module_id:uuid,p_group_ids:string[]}` | `{ok:true,module_id,group_ids}`; атомарное открытие для выбранных групп |
 | admin_command | `{p_action:string,p_data:object}` | `{ok:true,module_id:uuid|null}` |
 
 Названия RPC сохранены для совместимости: `module_id` — конкретный экзамен/партия. Поля `course_module_id`, `course_module_title`, `subject_id`, `subject_name` в карточках экзаменов обозначают учебный модуль и дисциплину. Current также содержит метаданные дисциплины/учебного модуля. admin_data дополнительно возвращает массивы `subjects:[{id,name}]` и `course_modules:[{id,subject_id,title,position}]`. Фильтры дисциплины и учебного модуля применяются в панели к разрешённым преподавателю данным; результаты по конкретному экзамену/группе фильтрует сервер.
@@ -48,7 +49,7 @@ Current активной попытки: `{attempt_id,done:false,title,index,tot
 
 `POST /functions/v1/manage-account`, с Authorization и допустимым Origin:
 
-- `{action:"create",id,login,full_name,group_id,active?:boolean,password?:string}` → `{id,code}`.
+- `{action:"create",id?:string,login,full_name,group_id,active?:boolean,password?:string}` → `{id,code}`. Без id сервер создаёт UUID; явный ID импорта сохраняется.
 - `{action:"reset",id,password?:string}` → `{code}`.
 
 Необязательный password задаёт выбранный преподавателем пароль длиной 8–128 символов. При отсутствии генерируется случайный индивидуальный код. Возвращаемый code — фактически установленный пароль/код. Пароль не записывается в аудит. JSON-импорт вызывает create последовательно для каждой новой записи; общего batch endpoint нет. Существующие аккаунты пропускает клиент на основании свежего admin_data, ограничения уникальности дополнительно защищают базу.

@@ -10,6 +10,7 @@ import {
 import type { AdminData, Module, Question } from "../entities/types";
 import { CatalogManager } from "../features/CatalogManager";
 import { StudentJsonImport } from "../features/StudentJsonImport";
+import { ExamAdmission } from "../features/ExamAdmission";
 const status: Record<string, string> = {
   draft: "Черновик",
   open: "Открыт",
@@ -80,7 +81,7 @@ export function TeacherPage({ user }: { user: string }) {
     fn: () => Promise<unknown>,
     success = "Изменения сохранены",
   ) {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     setError("");
     setMessage("");
@@ -89,8 +90,10 @@ export function TeacherPage({ user }: { user: string }) {
       setMessage(success);
       await cache.invalidateQueries({ queryKey: ["admin"] });
       await cache.invalidateQueries({ queryKey: ["bank"] });
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -357,6 +360,12 @@ export function TeacherPage({ user }: { user: string }) {
           </select>
         </label>
       </div>
+      {tab === "Экзамены" && (
+        <p className="muted">
+          Фильтры сверху меняют отображение. Доступ групп выбирается в карточке
+          экзамена перед открытием.
+        </p>
+      )}
       {(error || data.error) && (
         <div className="alert" role="alert">
           {error || data.error?.message}
@@ -579,6 +588,22 @@ export function TeacherPage({ user }: { user: string }) {
                 {m.question_count} вопросов · {m.seconds_per_question} сек. на
                 вопрос · {m.total_seconds} сек. всего · {m.max_score} баллов
               </p>
+              <ExamAdmission
+                exam={m}
+                groups={d.groups}
+                access={d.module_groups}
+                busy={busy}
+                onOpen={(ids) =>
+                  run(
+                    () =>
+                      rpc("admin_open_exam_groups", {
+                        p_module_id: m.id,
+                        p_group_ids: ids,
+                      }),
+                    "Экзамен открыт для выбранных групп",
+                  )
+                }
+              />
               <div className="toolbar">
                 {m.status === "draft" && (
                   <button className="secondary" onClick={() => editModule(m)}>
@@ -594,27 +619,6 @@ export function TeacherPage({ user }: { user: string }) {
                 >
                   Создать копию
                 </button>
-                {(m.status === "draft" || m.status === "closed") && (
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => {
-                      if (
-                        confirm(
-                          "Открыть приём? Проверьте вопросы и доступ групп.",
-                        )
-                      )
-                        void run(() =>
-                          command("transition", {
-                            module_id: m.id,
-                            status: "open",
-                          }),
-                        );
-                    }}
-                  >
-                    Открыть
-                  </button>
-                )}
                 {m.status === "open" && (
                   <button
                     className="secondary"
@@ -631,7 +635,7 @@ export function TeacherPage({ user }: { user: string }) {
                         );
                     }}
                   >
-                    Закрыть
+                    Закрыть приём
                   </button>
                 )}
                 {m.status === "closed" && (
@@ -745,7 +749,7 @@ export function TeacherPage({ user }: { user: string }) {
           <section className="card">
             <h2>Доступ и окна сдачи</h2>
             <p className="muted">
-              Выберите модуль сверху. Окна задаются в UTC; рядом показано время
+              Выберите экзамен сверху. Окна задаются в UTC; рядом показано время
               Бишкека (UTC+6).
             </p>
             {d.groups.map((g) => {
@@ -843,7 +847,6 @@ export function TeacherPage({ user }: { user: string }) {
                 void run(async () => {
                   const r = await accountAction({
                     action: "create",
-                    id: f.get("id"),
                     login: f.get("login"),
                     full_name: f.get("name"),
                     group_id: f.get("group"),
@@ -853,10 +856,6 @@ export function TeacherPage({ user }: { user: string }) {
               }}
             >
               <div className="fields">
-                <label>
-                  StudentID
-                  <input name="id" required pattern="[-a-zA-Z0-9_]{2,64}" />
-                </label>
                 <label>
                   ФИО
                   <input name="name" required maxLength={150} />
@@ -984,7 +983,6 @@ export function TeacherPage({ user }: { user: string }) {
                       <tr key={s.id}>
                         <td>
                           <b>{s.full_name}</b>
-                          <small>{s.id}</small>
                         </td>
                         <td>{s.login}</td>
                         <td>{s.group_id}</td>

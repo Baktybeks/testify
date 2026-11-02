@@ -474,6 +474,36 @@ td button {
   padding: 15px;
   border-radius: 10px;
 }
+.exam-admission {
+  background: #f8faff;
+  border: 1px solid #e1e8f7;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+}
+.exam-admission h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.admission-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+}
+.admission-groups .check {
+  margin: 6px 0;
+}
+.admission-confirm {
+  background: white;
+  border: 1px solid #d8e1f3;
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 13px;
+}
+.admission-note {
+  font-size: 11px;
+  margin: 6px 0 0;
+}
 .student-home {
   max-width: 1040px;
   padding-top: 55px;

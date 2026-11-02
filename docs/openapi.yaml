@@ -114,6 +114,24 @@ paths:
       responses:
         "200": { description: Teacher-only question bank }
         default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_open_exam_groups:
+    post:
+      operationId: adminOpenExamGroups
+      description: Teacher-only, atomically sets the exact group access list and opens a ready draft or closed exam. Existing time windows are preserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_module_id, p_group_ids]
+              properties:
+                p_module_id: { type: string, format: uuid }
+                p_group_ids:
+                  { type: array, minItems: 1, items: { type: string } }
+      responses:
+        "200": { description: Opened for the selected group IDs }
+        default: { $ref: "#/components/responses/Error" }
   /rest/v1/rpc/admin_command:
     post:
       operationId: adminCommand
@@ -155,7 +173,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [action, id]
+              required: [action]
+              oneOf:
+                - properties:
+                    action: { enum: [create] }
+                - required: [id]
+                  properties:
+                    action: { enum: [reset] }
               properties:
                 action: { type: string, enum: [create, reset] }
                 id: { type: string }

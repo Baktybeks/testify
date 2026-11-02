@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { providedPassword } from "../_shared/password.ts";
+import { resolveStudentId } from "../_shared/student-id.ts";
 const url = Deno.env.get("SUPABASE_URL")!;
 const origin = Deno.env.get("ALLOWED_ORIGIN") || "https://baktybeks.github.io";
 const headers = {
@@ -76,9 +77,9 @@ Deno.serve(async (req) => {
       if (auditError) throw auditError;
       return reply({ code });
     }
+    const id = resolveStudentId(b.id);
     if (
       b.action !== "create" ||
-      !/^[-a-zA-Z0-9_.]{2,64}$/.test(b.id) ||
       !/^[a-z0-9_][a-z0-9_.-]{1,63}$/.test(b.login) ||
       typeof b.full_name !== "string" ||
       b.full_name.trim().length < 2 ||
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
       typeof b.group_id !== "string" ||
       !b.group_id
     )
-      throw new Error("Проверьте ID, логин, ФИО и группу");
+      throw new Error("Проверьте логин, ФИО и группу");
     const { data, error } = await service.auth.admin.createUser({
       email: `${b.login}@students.testify.invalid`,
       password: code,
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
       "service_register_student_with_status",
       {
         p_auth_id: data.user.id,
-        p_id: b.id,
+        p_id: id,
         p_login: b.login,
         p_name: b.full_name.trim(),
         p_group: b.group_id,
@@ -119,11 +120,11 @@ Deno.serve(async (req) => {
     }
     const { error: auditError } = await service.rpc("service_account_audit", {
       p_actor: user.id,
-      p_target: b.id,
+      p_target: id,
       p_action: "student_created",
     });
     if (auditError) throw auditError;
-    return reply({ id: b.id, code });
+    return reply({ id, code });
   } catch (e) {
     console.error(JSON.stringify({ event: "account_action_failed" }));
     return reply(

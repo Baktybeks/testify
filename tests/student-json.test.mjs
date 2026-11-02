@@ -2,7 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseStudentJson } from "../src/features/student-json.ts";
 import { providedPassword } from "../supabase/functions/_shared/password.ts";
+import { resolveStudentId } from "../supabase/functions/_shared/student-id.ts";
 const groups = new Set(["G1", "G2"]);
+test("manual account creation generates unique IDs and preserves explicit import IDs", () => {
+  const first = resolveStudentId(undefined),
+    second = resolveStudentId("");
+  assert.match(
+    first,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
+  assert.notEqual(first, second);
+  assert.equal(resolveStudentId("S01"), "S01");
+  for (const value of [null, 123, {}, "has spaces", "x".repeat(65)])
+    assert.throws(() => resolveStudentId(value));
+});
 const input = [
   { name: "Иванов Иван", login: "Ivanov_i_i" },
   {
@@ -82,9 +95,15 @@ test("invalid JSON, duplicates, unknown groups and malformed passwords are rejec
 test("server accepts supplied 8–128 character passwords verbatim and rejects invalid types", () => {
   assert.equal(providedPassword(undefined), undefined);
   assert.equal(providedPassword(" password-test "), " password-test ");
-  assert.equal(providedPassword('12345678'),'12345678');
-  assert.equal(parseStudentJson(JSON.stringify([input[0]]),'12345678','G1',groups)[0].password,'12345678');
-  assert.throws(()=>parseStudentJson(JSON.stringify([input[0]]),'1234567','G1',groups));
+  assert.equal(providedPassword("12345678"), "12345678");
+  assert.equal(
+    parseStudentJson(JSON.stringify([input[0]]), "12345678", "G1", groups)[0]
+      .password,
+    "12345678",
+  );
+  assert.throws(() =>
+    parseStudentJson(JSON.stringify([input[0]]), "1234567", "G1", groups),
+  );
   for (const value of [null, {}, false, 123, "", "1234567", "x".repeat(129)])
     assert.throws(() => providedPassword(value));
 });

@@ -20,6 +20,100 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("opening selected groups is atomic, preserves windows and rejects invalid admission", async () => {
+  const id = await module();
+  await as(teacher);
+  await command("save_group", { id: "G2", name: "Group 2" });
+  await command("transition", { module_id: id, status: "closed" });
+  await assert.rejects(
+    () => call("admin_open_exam_groups", [id, []]),
+    /Выберите/,
+  );
+  await assert.rejects(
+    () => call("admin_open_exam_groups", [id, ["Missing"]]),
+    /не найдена/,
+  );
+  await db.query(
+    "update exam_private.questions set active=false where module_id=$1",
+    [id],
+  );
+  await assert.rejects(
+    () => call("admin_open_exam_groups", [id, ["G2"]]),
+    /Недостаточно/,
+  );
+  let groups = (
+    await db.query(
+      "select group_id,access from exam_private.module_groups where module_id=$1 order by group_id",
+      [id],
+    )
+  ).rows;
+  assert.deepEqual(groups, [{ group_id: "G1", access: true }]);
+  assert.equal(
+    (
+      await db.query("select status from exam_private.modules where id=$1", [
+        id,
+      ])
+    ).rows[0].status,
+    "closed",
+  );
+  await db.query(
+    "update exam_private.questions set active=true where module_id=$1",
+    [id],
+  );
+  const future = "2099-01-01T00:00:00.000Z";
+  await command("group_access", {
+    module_id: id,
+    group_id: "G2",
+    access: false,
+    window_start: future,
+    window_end: null,
+  });
+  await as(student);
+  await assert.rejects(
+    () => call("admin_open_exam_groups", [id, ["G2"]]),
+    /преподавателя/,
+  );
+  await as(teacher);
+  const opened = await call("admin_open_exam_groups", [id, ["G2", "G2"]]);
+  assert.deepEqual(opened.group_ids, ["G2"]);
+  groups = (
+    await db.query(
+      "select group_id,access from exam_private.module_groups where module_id=$1 order by group_id",
+      [id],
+    )
+  ).rows;
+  assert.deepEqual(groups, [
+    { group_id: "G1", access: false },
+    { group_id: "G2", access: true },
+  ]);
+  assert.equal(
+    new Date(
+      (
+        await db.query(
+          "select window_start from exam_private.module_groups where module_id=$1 and group_id='G2'",
+          [id],
+        )
+      ).rows[0].window_start,
+    ).toISOString(),
+    future,
+  );
+  await assert.rejects(
+    () => call("admin_open_exam_groups", [id, ["G1"]]),
+    /черновика/,
+  );
+  await command("transition", { module_id: id, status: "closed" });
+  await command("group_access", {
+    module_id: id,
+    group_id: "G2",
+    access: true,
+    window_start: null,
+    window_end: "2000-01-01T00:00:00Z",
+  });
+  await assert.rejects(
+    () => call("admin_open_exam_groups", [id, ["G2"]]),
+    /истекло/,
+  );
+});
 test("subject catalog: independent modules, bank copies and role boundaries", async () => {
   await as(teacher);
   const catalog = await call("admin_data");
