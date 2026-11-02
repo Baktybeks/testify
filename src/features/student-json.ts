@@ -56,10 +56,10 @@ export function parseStudentJson(
     if (
       (r.password !== undefined || password !== "") &&
       (typeof password !== "string" ||
-        password.length < 12 ||
+        password.length < 8 ||
         password.length > 128)
     )
-      fail("пароль должен содержать 12–128 символов");
+      fail("пароль должен содержать 8–128 символов");
     if (ids.has(id) || logins.has(login)) fail("повторяется ID или логин");
     ids.add(id);
     logins.add(login);

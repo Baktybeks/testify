@@ -190,14 +190,14 @@ export function StudentJsonImport({
           <input
             type="password"
             autoComplete="new-password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
               invalidate();
             }}
-            placeholder="12–128 символов или оставьте пустым"
+            placeholder="8–128 символов или оставьте пустым"
           />
         </label>
         <p className="muted">

@@ -79,9 +79,12 @@ test("invalid JSON, duplicates, unknown groups and malformed passwords are rejec
       ),
     );
 });
-test("server accepts supplied 12–128 character passwords verbatim and rejects invalid types", () => {
+test("server accepts supplied 8–128 character passwords verbatim and rejects invalid types", () => {
   assert.equal(providedPassword(undefined), undefined);
   assert.equal(providedPassword(" password-test "), " password-test ");
-  for (const value of [null, {}, false, 123, "", "12345678", "x".repeat(129)])
+  assert.equal(providedPassword('12345678'),'12345678');
+  assert.equal(parseStudentJson(JSON.stringify([input[0]]),'12345678','G1',groups)[0].password,'12345678');
+  assert.throws(()=>parseStudentJson(JSON.stringify([input[0]]),'1234567','G1',groups));
+  for (const value of [null, {}, false, 123, "", "1234567", "x".repeat(129)])
     assert.throws(() => providedPassword(value));
 });
