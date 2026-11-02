@@ -42,7 +42,13 @@ export function AttemptReview({
               {q.position}. {q.text}
             </h4>
             <p>
-              <b>
+              <b
+                className={
+                  !q.selected_id || !q.correct
+                    ? "review-status-incorrect"
+                    : undefined
+                }
+              >
                 {!q.selected_id
                   ? "Нет ответа"
                   : q.correct

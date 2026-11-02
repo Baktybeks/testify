@@ -903,3 +903,6 @@ td button {
   background: #fef2f2;
   color: #991b1b;
 }
+.review-status-incorrect {
+  color: #b42318;
+}
