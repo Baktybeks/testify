@@ -409,6 +409,18 @@ export function TeacherPage({
         </div>
       )}
       {tab === "Преподаватели" && superadmin && <TeacherAccounts user={user} />}
+      {tab === "Экзамены" && (subjectId || courseModuleId || mid) && (
+        <button
+          className="secondary"
+          onClick={() => {
+            setSubjectId("");
+            setCourseModuleId("");
+            setMid("");
+          }}
+        >
+          Показать все экзамены, включая архив
+        </button>
+      )}
       {tab === "Экзамены" && (
         <p className="muted">
           Фильтры сверху меняют отображение. Доступ групп выбирается в карточке
@@ -668,13 +680,14 @@ export function TeacherPage({
                 >
                   Создать копию
                 </button>
-                {m.status === "draft" && (
+                {(m.status === "draft" ||
+                  (superadmin && m.status !== "open")) && (
                   <button
                     className="danger"
                     disabled={busy}
                     onClick={() => {
                       const title = prompt(
-                        `Удалить черновик «${m.title}»? Банк вопросов учебного модуля сохранится. Введите название экзамена для подтверждения. Экзамен с историей попыток удалить нельзя.`,
+                        `Удалить экзамен «${m.title}»? Банк вопросов учебного модуля сохранится. Введите название экзамена для подтверждения. Экзамен с попытками или разрешениями пересдачи удалить нельзя.`,
                       );
                       if (title === null) return;
                       void run(async () => {
@@ -684,7 +697,7 @@ export function TeacherPage({
                         });
                         if (mid === m.id) setMid("");
                         if (editing === m.id) setEditing("");
-                      }, "Черновик экзамена удалён");
+                      }, "Экзамен удалён");
                     }}
                   >
                     Удалить экзамен

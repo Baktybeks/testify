@@ -246,7 +246,7 @@ paths:
   /rest/v1/rpc/admin_delete_unused_exam:
     post:
       operationId: adminDeleteUnusedExam
-      description: Teacher-only removal of a draft without attempts, counters or retake grants. Preserves the shared bank, removes exam group access. Audited.
+      description: Teacher removes unused drafts; superadmin also removes closed, published and archived exams without attempts or retake grants. Open exams must be closed first. Superadmin may remove leftover attempt counters. Preserves shared banks. Audited.
       requestBody:
         required: true
         content:

@@ -98,7 +98,7 @@ test("unused exam deletion checks role, title, state and retained history", asyn
   ]);
   await assert.rejects(
     () => call("admin_delete_unused_exam", [mid, title]),
-    /черновик/,
+    /закройте/,
   );
   await db.query("update exam_private.modules set status='draft' where id=$1", [
     mid,
@@ -148,6 +148,58 @@ test("unused exam deletion checks role, title, state and retained history", asyn
       )
     ).rows[0].n,
     1,
+  );
+});
+test("only superadmin can remove published or archived exams without attempts, retaining their bank", async () => {
+  for (const state of ["published", "archived"]) {
+    const mid = await module();
+    await as(teacher);
+    await db.query("update exam_private.modules set status=$2 where id=$1", [
+      mid,
+      state,
+    ]);
+    const cid = (
+      await db.query(
+        "select course_module_id from exam_private.modules where id=$1",
+        [mid],
+      )
+    ).rows[0].course_module_id;
+    await assert.rejects(
+      () => call("admin_delete_unused_exam", [mid, "Test"]),
+      /суперадмин/,
+    );
+    await db.query(
+      "insert into exam_private.attempt_slots(module_id,student_id,started_count,last_number) values($1,'S1',2,2)",
+      [mid],
+    );
+    await as(boss);
+    await assert.rejects(
+      () => call("admin_delete_unused_exam", [mid, "Wrong"]),
+      /название/,
+    );
+    await call("admin_delete_unused_exam", [mid, "Test"]);
+    assert.equal((await call("admin_course_questions", [cid])).length, 90);
+    assert.equal(
+      (
+        await db.query(
+          "select count(*)::int n from exam_private.attempt_slots where module_id=$1",
+          [mid],
+        )
+      ).rows[0].n,
+      0,
+    );
+  }
+  const mid = await module();
+  await as(student);
+  await call("attempt_start_or_resume", [mid]);
+  await as(boss);
+  await db.query(
+    "update exam_private.modules set status='closed' where id=$1",
+    [mid],
+  );
+  await assert.rejects(
+    () => call("admin_delete_unused_exam", [mid, "Test"]),
+    /история/,
   );
 });
 test("teacher management is superadmin-only and never assigns superadmin to a new teacher", async () => {

@@ -190,6 +190,10 @@ for (const role of ["teacher", "superadmin"] as const)
       await expect(
         page.getByRole("button", { name: "Преподаватели", exact: true }),
       ).toHaveCount(0);
+    await page.getByRole("button", { name: "Экзамены", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Удалить экзамен", exact: true }),
+    ).toHaveCount(role === "superadmin" ? 1 : 0);
     await page.getByRole("button", { name: "Результаты", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Экзамен", exact: true })
