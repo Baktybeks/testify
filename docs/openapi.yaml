@@ -243,6 +243,24 @@ paths:
             or the previous response for the same request key,
           }
         default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_delete_exam_with_history:
+    post:
+      operationId: adminDeleteExamWithHistory
+      description: Superadmin-only permanent deletion of a non-open exam and all its attempt history. Shared question bank and audit logs remain. Requires exact title and reason.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_module_id, p_confirmation, p_reason]
+              properties:
+                p_module_id: { type: string, format: uuid }
+                p_confirmation: { type: string }
+                p_reason: { type: string, minLength: 3, maxLength: 1000 }
+      responses:
+        "200": { description: Exam and history removed atomically }
+        default: { $ref: "#/components/responses/Error" }
   /rest/v1/rpc/admin_delete_unused_exam:
     post:
       operationId: adminDeleteUnusedExam

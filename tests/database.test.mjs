@@ -21,6 +21,91 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("full exam deletion requires superadmin, title and reason, removes history and retains the shared bank", async () => {
+  const mid = await module();
+  await as(student);
+  const attempt = await call("attempt_start_or_resume", [mid]);
+  await call("attempt_submit_answer", [
+    attempt.attempt_id,
+    1,
+    attempt.options[0].id,
+    crypto.randomUUID(),
+  ]);
+  await as(teacher);
+  await assert.rejects(
+    () => call("admin_delete_exam_with_history", [mid, "Test", "Test cleanup"]),
+    /суперадмин/,
+  );
+  await as(boss);
+  await assert.rejects(
+    () => call("admin_delete_exam_with_history", [mid, "Test", "Test cleanup"]),
+    /закройте/,
+  );
+  await db.query(
+    "update exam_private.modules set status='closed' where id=$1",
+    [mid],
+  );
+  await assert.rejects(
+    () =>
+      call("admin_delete_exam_with_history", [mid, "Wrong", "Test cleanup"]),
+    /название/,
+  );
+  await assert.rejects(
+    () => call("admin_delete_exam_with_history", [mid, "Test", ""]),
+    /причину/,
+  );
+  await as(student);
+  await finishAttempt(attempt.attempt_id);
+  await as(boss);
+  await attemptAction("grant_retake", mid, attempt.attempt_id);
+  const cid = (
+    await db.query(
+      "select course_module_id from exam_private.modules where id=$1",
+      [mid],
+    )
+  ).rows[0].course_module_id;
+  await call("admin_delete_exam_with_history", [
+    mid,
+    "Test",
+    "Ошибочно созданный экзамен",
+  ]);
+  for (const table of [
+    "modules",
+    "attempts",
+    "attempt_slots",
+    "retake_grants",
+    "module_groups",
+  ])
+    assert.equal(
+      (
+        await db.query(
+          `select count(*)::int n from exam_private.${table} where ${table === "modules" ? "id" : "module_id"}=$1`,
+          [mid],
+        )
+      ).rows[0].n,
+      0,
+    );
+  for (const table of ["answers", "commands", "results", "attempt_questions"])
+    assert.equal(
+      (
+        await db.query(
+          `select count(*)::int n from exam_private.${table} where attempt_id=$1`,
+          [attempt.attempt_id],
+        )
+      ).rows[0].n,
+      0,
+    );
+  assert.equal((await call("admin_course_questions", [cid])).length, 90);
+  const audit = (
+    await db.query(
+      "select details from exam_private.audit_logs where action='exam_with_history_deleted' and target=$1",
+      [mid],
+    )
+  ).rows[0].details;
+  assert.equal(audit.reason, "Ошибочно созданный экзамен");
+  assert.equal(audit.attempts, 1);
+  assert.equal(audit.results, 1);
+});
 test("module bank works without exams, is shared by exam copies and survives exam deletion", async () => {
   await as(teacher);
   const catalog = await call("admin_data");

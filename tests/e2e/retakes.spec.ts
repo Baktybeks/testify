@@ -110,7 +110,10 @@ for (const role of ["teacher", "superadmin"] as const)
             average: 2,
           },
         };
-      else if (path.endsWith("/admin_attempt_action")) {
+      else if (path.endsWith("/admin_delete_exam_with_history")) {
+        requests.push(route.request().postDataJSON());
+        data = { deleted: true };
+      } else if (path.endsWith("/admin_attempt_action")) {
         const b = route.request().postDataJSON();
         requests.push(b);
         if (b.p_action === "publish_result")
@@ -194,6 +197,12 @@ for (const role of ["teacher", "superadmin"] as const)
     await expect(
       page.getByRole("button", { name: "Удалить экзамен", exact: true }),
     ).toHaveCount(role === "superadmin" ? 1 : 0);
+    await expect(
+      page.getByRole("button", {
+        name: "Удалить экзамен со всей историей",
+        exact: true,
+      }),
+    ).toHaveCount(role === "superadmin" ? 1 : 0);
     await page.getByRole("button", { name: "Результаты", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Экзамен", exact: true })
@@ -260,6 +269,30 @@ for (const role of ["teacher", "superadmin"] as const)
           exact: true,
         }),
       ).toBeEnabled();
+      await page.getByRole("button", { name: "Экзамены", exact: true }).click();
+      const confirmDeletion = (dialog: import("@playwright/test").Dialog) =>
+        dialog.accept(
+          dialog.message().startsWith("Причина")
+            ? "Ошибочный экзамен"
+            : exam.title,
+        );
+      page.on("dialog", confirmDeletion);
+      await page
+        .getByRole("button", {
+          name: "Удалить экзамен со всей историей",
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(() =>
+          requests.some(
+            (r) =>
+              r.p_confirmation === exam.title &&
+              r.p_reason === "Ошибочный экзамен",
+          ),
+        )
+        .toBeTruthy();
+      page.off("dialog", confirmDeletion);
     } else {
       await page
         .getByText("Разрешения на пересдачу · 1", { exact: true })

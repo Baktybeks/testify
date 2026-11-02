@@ -707,6 +707,44 @@ export function TeacherPage({
                     Удалить экзамен
                   </button>
                 )}
+                {superadmin && m.status !== "open" && (
+                  <button
+                    className="danger"
+                    disabled={busy}
+                    onClick={() => {
+                      const title = prompt(
+                        `Удалить «${m.title}» со ВСЕМИ попытками, ответами, результатами и разрешениями пересдачи безвозвратно? Банк вопросов сохранится. Введите точное название экзамена.`,
+                      );
+                      if (title === null) return;
+                      if (title !== m.title) {
+                        setError("Введите точное название экзамена");
+                        return;
+                      }
+                      const reason = prompt(
+                        "Причина полного удаления экзамена (3–1000 символов)",
+                      );
+                      if (reason === null) return;
+                      if (
+                        reason.trim().length < 3 ||
+                        reason.trim().length > 1000
+                      ) {
+                        setError("Укажите причину удаления: 3–1000 символов");
+                        return;
+                      }
+                      void run(async () => {
+                        await rpc("admin_delete_exam_with_history", {
+                          p_module_id: m.id,
+                          p_confirmation: title,
+                          p_reason: reason.trim(),
+                        });
+                        if (mid === m.id) setMid("");
+                        if (editing === m.id) setEditing("");
+                      }, "Экзамен и его история удалены. Банк вопросов сохранён");
+                    }}
+                  >
+                    Удалить экзамен со всей историей
+                  </button>
+                )}
                 {m.status === "open" && (
                   <button
                     className="secondary"
