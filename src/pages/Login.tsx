@@ -27,7 +27,7 @@ export function Login() {
     <div className="login-layout">
       <aside className="login-story">
         <a className="brand" href="#">
-          <span className="brand-icon">E</span>exam-platform
+          <span className="brand-icon">E</span>Exam platform
         </a>
         <div>
           <span className="eyebrow">ПРОСТРАНСТВО ДЛЯ ЗНАНИЙ</span>
@@ -53,7 +53,7 @@ export function Login() {
             </span>
           </div>
         </div>
-        <small>exam-platform · Учебная платформа</small>
+        <small>Exam platform · Учебная платформа</small>
       </aside>
       <main className="login-main">
         <section className="login-card">

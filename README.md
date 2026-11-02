@@ -1,4 +1,4 @@
-# exam-platform
+# Exam platform
 
 Платформа экзаменов: React 19, TypeScript 5.9, Vite 7, TanStack Query 5 и Supabase. Фронтенд размещается на GitHub Pages, бизнес-правила выполняются транзакционно в PostgreSQL. Google Sheets и Apps Script для работы не нужны.
 

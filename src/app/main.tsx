@@ -42,7 +42,7 @@ function App() {
   if (!configured)
     return (
       <main className="setup card">
-        <span className="eyebrow">exam-platform</span>
+        <span className="eyebrow">Exam platform</span>
         <h1>Подключим экзамены</h1>
         <p>
           Приложение собрано. Для работы подключите Supabase по инструкции в
@@ -72,7 +72,7 @@ function App() {
         <a className="brand" href="#">
           <span className="brand-icon">E</span>
           <span>
-            exam-platform<small>Платформа экзаменов</small>
+            Exam platform<small>Платформа экзаменов</small>
           </span>
         </a>
         <div className="identity">
