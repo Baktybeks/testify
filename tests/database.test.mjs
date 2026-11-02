@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 let db;
 const teacher = "00000000-0000-0000-0000-000000000001",
+  boss = "00000000-0000-0000-0000-000000000004",
   student = "00000000-0000-0000-0000-000000000002",
   other = "00000000-0000-0000-0000-000000000003";
 before(async () => {
@@ -16,10 +17,247 @@ before(async () => {
     .sort())
     await db.exec(await readFile("supabase/migrations/" + f, "utf8"));
   await db.exec(
-    `insert into auth.users values('${teacher}'),('${student}'),('${other}');insert into exam_private.profiles values('${teacher}','teacher','Teacher',true),('${student}','student','Student',true),('${other}','student','Other',true);insert into exam_private.groups values('G1','Group 1');insert into exam_private.students values('S1','${student}','student_1','G1'),('S2','${other}','student_2','G1');`,
+    `insert into auth.users values('${teacher}'),('${student}'),('${other}'),('${boss}');insert into exam_private.profiles values('${teacher}','teacher','Teacher',true),('${student}','student','Student',true),('${other}','student','Other',true),('${boss}','superadmin','Superadmin',true);insert into exam_private.groups values('G1','Group 1');insert into exam_private.students values('S1','${student}','student_1','G1'),('S2','${other}','student_2','G1');`,
   );
 });
 after(async () => await db?.close());
+async function attemptAction(action, mid, aid = null, options = {}) {
+  return call("admin_attempt_action", [
+    action,
+    mid,
+    "S1",
+    options.reason ?? "Телефон выключился",
+    options.key ?? crypto.randomUUID(),
+    aid,
+    options.deadline ?? null,
+    options.confirmation ?? null,
+    options.grant ?? null,
+  ]);
+}
+async function finishAttempt(aid) {
+  await db.query(
+    `update exam_private.attempts set deadline_at=clock_timestamp()-interval '1 second' where id=$1`,
+    [aid],
+  );
+  return call("attempt_current", [aid]);
+}
+test("repeatable retakes retain history, consume one permission and reject the old tab", async () => {
+  const mid = await module();
+  await as(student);
+  const first = await call("attempt_start_or_resume", [mid]);
+  await call("attempt_submit_answer", [
+    first.attempt_id,
+    1,
+    first.options[0].id,
+    crypto.randomUUID(),
+  ]);
+  await as(teacher);
+  const key = crypto.randomUUID();
+  const permission = await attemptAction(
+    "grant_retake",
+    mid,
+    first.attempt_id,
+    { key },
+  );
+  assert.deepEqual(
+    await attemptAction("grant_retake", mid, first.attempt_id, { key }),
+    permission,
+  );
+  await assert.rejects(
+    () =>
+      attemptAction("grant_retake", mid, first.attempt_id, {
+        key,
+        reason: "Другая причина",
+      }),
+    /Ключ/,
+  );
+  await as(student);
+  const stale = await call("attempt_submit_answer", [
+    first.attempt_id,
+    2,
+    first.options[0].id,
+    crypto.randomUUID(),
+  ]);
+  assert.equal(stale.annulled, true);
+  assert.equal(stale.score, undefined);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from exam_private.answers where attempt_id=$1",
+        [first.attempt_id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  const cards = await call("student_modules");
+  assert.equal(cards.find((m) => m.id === mid).retake_allowed, true);
+  const second = await call("attempt_start_or_resume", [mid]);
+  assert.equal(second.attempt_number, 2);
+  assert.notEqual(second.attempt_id, first.attempt_id);
+  assert.notDeepEqual(second.options, first.options);
+  assert.equal(
+    (await call("attempt_start_or_resume", [mid])).attempt_id,
+    second.attempt_id,
+  );
+  await as(teacher);
+  await attemptAction("grant_retake", mid, second.attempt_id, {
+    reason: "Повторный технический сбой",
+  });
+  await as(student);
+  const third = await call("attempt_start_or_resume", [mid]);
+  assert.equal(third.attempt_number, 3);
+  await as(teacher);
+  const report = await call("admin_data", [mid, null]);
+  assert.equal(report.attempts.length, 3);
+  assert.equal(
+    report.attempts.filter((a) => a.status === "annulled").length,
+    2,
+  );
+  assert.equal(report.stats.active, 1);
+  assert.equal(report.stats.started, 1);
+});
+test("only superadmin grants retakes after publication and publishes the replacement grade", async () => {
+  const mid = await module();
+  await as(student);
+  const first = await call("attempt_start_or_resume", [mid]);
+  await finishAttempt(first.attempt_id);
+  await as(teacher);
+  await command("transition", { module_id: mid, status: "closed" });
+  await command("transition", { module_id: mid, status: "published" });
+  await assert.rejects(
+    () => attemptAction("grant_retake", mid, first.attempt_id),
+    /суперадмин/,
+  );
+  await as(boss);
+  assert.equal((await call("my_profile")).role, "superadmin");
+  await attemptAction("grant_retake", mid, first.attempt_id);
+  await as(student);
+  assert.equal(
+    (await call("attempt_current", [first.attempt_id])).published,
+    false,
+  );
+  const second = await call("attempt_start_or_resume", [mid]);
+  assert.equal((await finishAttempt(second.attempt_id)).published, false);
+  await as(teacher);
+  await assert.rejects(
+    () => attemptAction("publish_result", mid, second.attempt_id),
+    /суперадмин/,
+  );
+  await as(boss);
+  await attemptAction("publish_result", mid, second.attempt_id, {
+    reason: "Проверена пересдача после сбоя",
+  });
+  await as(student);
+  const visible = await call("attempt_current", [second.attempt_id]);
+  assert.equal(visible.published, true);
+  assert.equal(visible.score, 0);
+});
+test("permanent deletion requires superadmin, reason and login; it cannot create a free new attempt", async () => {
+  const mid = await module();
+  await as(student);
+  const first = await call("attempt_start_or_resume", [mid]);
+  await finishAttempt(first.attempt_id);
+  await as(teacher);
+  await assert.rejects(
+    () =>
+      attemptAction("delete_attempt", mid, first.attempt_id, {
+        confirmation: "student_1",
+      }),
+    /суперадмин/,
+  );
+  await as(boss);
+  await assert.rejects(
+    () =>
+      attemptAction("delete_attempt", mid, first.attempt_id, {
+        confirmation: "wrong",
+      }),
+    /логин/,
+  );
+  await assert.rejects(
+    () =>
+      attemptAction("delete_attempt", mid, first.attempt_id, {
+        confirmation: "student_1",
+        reason: "",
+      }),
+    /причину/,
+  );
+  const key = crypto.randomUUID();
+  await attemptAction("delete_attempt", mid, first.attempt_id, {
+    confirmation: "student_1",
+    key,
+  });
+  await attemptAction("delete_attempt", mid, first.attempt_id, {
+    confirmation: "student_1",
+    key,
+  });
+  for (const table of ["answers", "commands", "results", "attempt_questions"])
+    assert.equal(
+      (
+        await db.query(
+          `select count(*)::int n from exam_private.${table} where attempt_id=$1`,
+          [first.attempt_id],
+        )
+      ).rows[0].n,
+      0,
+    );
+  await as(student);
+  await assert.rejects(
+    () => call("attempt_current", [first.attempt_id]),
+    /недоступна/,
+  );
+  await assert.rejects(
+    () => call("attempt_start_or_resume", [mid]),
+    /разрешение/,
+  );
+  await as(boss);
+  await attemptAction("grant_retake", mid);
+  await as(student);
+  const replacement = await call("attempt_start_or_resume", [mid]);
+  assert.equal(replacement.attempt_number, 2);
+  const audit = (
+    await db.query(
+      `select details from exam_private.audit_logs where action='delete_attempt' and target=$1`,
+      [first.attempt_id],
+    )
+  ).rows;
+  assert.equal(audit.length, 1);
+  assert.ok(!JSON.stringify(audit).includes("score"));
+});
+test("pending grants block global publication, can be revoked and cannot be used after expiry", async () => {
+  const mid = await module();
+  await as(student);
+  const first = await call("attempt_start_or_resume", [mid]);
+  await as(teacher);
+  const grant = await attemptAction("grant_retake", mid, first.attempt_id);
+  await command("transition", { module_id: mid, status: "closed" });
+  await assert.rejects(
+    () => command("transition", { module_id: mid, status: "published" }),
+    /неиспользованные/,
+  );
+  await attemptAction("revoke_retake", mid, null, {
+    grant: grant.grant_id,
+    reason: "Студент отказался от пересдачи",
+  });
+  const next = await attemptAction("grant_retake", mid);
+  await db.query(
+    `update exam_private.retake_grants set start_deadline=clock_timestamp()-interval '1 second' where id=$1`,
+    [next.grant_id],
+  );
+  await as(student);
+  await assert.rejects(
+    () => call("attempt_start_or_resume", [mid]),
+    /разрешение/,
+  );
+  await as(teacher);
+  await assert.rejects(
+    () =>
+      attemptAction("grant_retake", mid, null, {
+        deadline: "2000-01-01T00:00:00Z",
+      }),
+    /будущем/,
+  );
+  await command("transition", { module_id: mid, status: "published" });
+});
 test("opening selected groups is atomic, preserves windows and rejects invalid admission", async () => {
   const id = await module();
   await as(teacher);

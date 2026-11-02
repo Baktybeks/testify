@@ -11,6 +11,11 @@ import type { AdminData, Module, Question } from "../entities/types";
 import { CatalogManager } from "../features/CatalogManager";
 import { StudentJsonImport } from "../features/StudentJsonImport";
 import { ExamAdmission } from "../features/ExamAdmission";
+import {
+  AttemptActionDialog,
+  type AttemptActionTarget,
+} from "../features/AttemptActionDialog";
+import { RetakeControls, RetakeHistory } from "../features/RetakeControls";
 const status: Record<string, string> = {
   draft: "Черновик",
   open: "Открыт",
@@ -19,6 +24,7 @@ const status: Record<string, string> = {
   archived: "Архив",
   active: "Проходит",
   finished: "Завершён",
+  annulled: "Аннулирована",
 };
 const blankModule = {
   title: "Новая партия",
@@ -44,8 +50,16 @@ function date(v: string | null) {
     ? new Date(v).toLocaleString("ru-RU", { timeZone: "Asia/Bishkek" })
     : "—";
 }
-export function TeacherPage({ user }: { user: string }) {
+export function TeacherPage({
+  user,
+  role = "teacher",
+}: {
+  user: string;
+  role?: "teacher" | "superadmin";
+}) {
   const cache = useQueryClient();
+  const [attemptAction, setAttemptAction] =
+    useState<AttemptActionTarget | null>(null);
   const [tab, setTab] = useState("Обзор"),
     [subjectId, setSubjectId] = useState(""),
     [courseModuleId, setCourseModuleId] = useState(""),
@@ -191,7 +205,8 @@ export function TeacherPage({ user }: { user: string }) {
   );
   const visibleIds = new Set(visibleModules.map((m) => m.id));
   const attempts = all.attempts.filter((a) => visibleIds.has(a.module_id));
-  const finished = attempts.filter((a) => a.status === "finished");
+  const currentAttempts = attempts.filter((a) => a.is_current !== false);
+  const finished = currentAttempts.filter((a) => a.status === "finished");
   const scores = finished.filter((a) => a.score !== null);
   const d = {
     ...all,
@@ -199,8 +214,8 @@ export function TeacherPage({ user }: { user: string }) {
     attempts,
     stats: {
       ...all.stats,
-      started: attempts.length,
-      active: attempts.length - finished.length,
+      started: currentAttempts.length,
+      active: currentAttempts.filter((a) => a.status === "active").length,
       finished: finished.length,
       average: scores.length
         ? Number(
@@ -213,6 +228,20 @@ export function TeacherPage({ user }: { user: string }) {
   };
   const subjects = all.subjects || [],
     courseModules = all.course_modules || [];
+  const superadmin = (all.actor_role || role) === "superadmin";
+  const targetFor = (
+    a: AdminData["attempts"][number],
+    action: AttemptActionTarget["action"],
+  ): AttemptActionTarget => ({
+    action,
+    module_id: a.module_id,
+    student_id: a.student_id,
+    full_name: a.full_name,
+    login: a.login,
+    title: all.modules.find((m) => m.id === a.module_id)?.title || "",
+    attempt_id: a.id,
+    published: !!all.modules.find((m) => m.id === a.module_id)?.published_at,
+  });
   const resultRows: unknown[][] = [
     [
       "Студент",
@@ -226,6 +255,9 @@ export function TeacherPage({ user }: { user: string }) {
       "Завершение",
       "Правильно",
       "Балл",
+      "Номер попытки",
+      "Причина аннулирования",
+      "Аннулировал",
     ],
     ...d.attempts.map((a) => [
       a.full_name,
@@ -239,13 +271,18 @@ export function TeacherPage({ user }: { user: string }) {
       date(a.finished_at),
       a.correct_count,
       a.score,
+      a.attempt_number || 1,
+      a.void_reason,
+      a.voided_by_name,
     ]),
   ];
   return (
     <main className="dashboard">
       <div className="page-title">
         <div>
-          <span className="eyebrow">ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ</span>
+          <span className="eyebrow">
+            {superadmin ? "ПАНЕЛЬ СУПЕРАДМИНА" : "ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ"}
+          </span>
           <h1>Экзамены под контролем</h1>
           <p className="muted">Модули, участники и результаты в одном месте.</p>
         </div>
@@ -1293,6 +1330,59 @@ export function TeacherPage({ user }: { user: string }) {
           </ul>
         </div>
       )}
+      {tab === "Результаты" && (
+        <>
+          <RetakeControls
+            key={mid}
+            exam={selected}
+            students={all.students}
+            counters={all.attempt_counters || []}
+            superadmin={superadmin}
+            busy={busy}
+            onGrant={(s) => {
+              if (!selected) return;
+              const a = all.attempts.find(
+                (a) =>
+                  a.module_id === selected.id &&
+                  a.student_id === s.id &&
+                  a.is_current !== false,
+              );
+              setAttemptAction({
+                action: "grant_retake",
+                module_id: selected.id,
+                student_id: s.id,
+                full_name: s.full_name,
+                login: s.login,
+                title: selected.title,
+                attempt_id: a?.id,
+                published: !!selected.published_at,
+              });
+            }}
+          />
+          <RetakeHistory
+            modules={all.modules}
+            grants={(all.retake_grants || []).filter((g) =>
+              visibleIds.has(g.module_id),
+            )}
+            superadmin={superadmin}
+            busy={busy}
+            onRevoke={(g) =>
+              setAttemptAction({
+                action: "revoke_retake",
+                module_id: g.module_id,
+                student_id: g.student_id,
+                full_name: g.full_name,
+                login: g.login,
+                title:
+                  all.modules.find((m) => m.id === g.module_id)?.title || "",
+                grant_id: g.id,
+                published: !!all.modules.find((m) => m.id === g.module_id)
+                  ?.published_at,
+              })
+            }
+          />
+        </>
+      )}
       {(tab === "Результаты" || tab === "Обзор") && (
         <section className="card">
           <div className="space">
@@ -1328,12 +1418,16 @@ export function TeacherPage({ user }: { user: string }) {
                   <th>Начало · Бишкек</th>
                   <th>Верно</th>
                   <th>Балл</th>
+                  <th>Действия</th>
                 </tr>
               </thead>
               <tbody>
                 {d.attempts.map((a) => (
                   <tr key={a.id}>
-                    <td>{a.full_name}</td>
+                    <td>
+                      {a.full_name}
+                      <small>Попытка №{a.attempt_number || 1}</small>
+                    </td>
                     <td>
                       {all.modules.find((m) => m.id === a.module_id)?.title}
                       <small>
@@ -1351,6 +1445,11 @@ export function TeacherPage({ user }: { user: string }) {
                     <td>{a.group_id}</td>
                     <td>
                       <span className="pill">{status[a.status]}</span>
+                      {a.void_reason && (
+                        <small className="reason-cell">
+                          {a.void_reason} · {a.voided_by_name}
+                        </small>
+                      )}
                     </td>
                     <td>
                       {a.current_index} / {a.question_count}
@@ -1358,7 +1457,63 @@ export function TeacherPage({ user }: { user: string }) {
                     <td>{date(a.started_at)}</td>
                     <td>{a.correct_count ?? "—"}</td>
                     <td>
-                      <b>{a.score ?? "—"}</b>
+                      {a.is_current === false ? (
+                        <>
+                          <s>{a.score ?? "—"}</s>
+                          <small>Не учитывается</small>
+                        </>
+                      ) : (
+                        <b>{a.score ?? "—"}</b>
+                      )}
+                    </td>
+                    <td>
+                      <div className="toolbar">
+                        {a.is_current !== false &&
+                          !["draft", "archived"].includes(
+                            all.modules.find((m) => m.id === a.module_id)
+                              ?.status || "",
+                          ) &&
+                          (!all.modules.find((m) => m.id === a.module_id)
+                            ?.published_at ||
+                            superadmin) && (
+                            <button
+                              className="secondary"
+                              disabled={busy}
+                              onClick={() =>
+                                setAttemptAction(targetFor(a, "grant_retake"))
+                              }
+                            >
+                              Разрешить пересдачу
+                            </button>
+                          )}
+                        {superadmin &&
+                          a.is_current !== false &&
+                          a.status === "finished" &&
+                          !a.result_published_at &&
+                          all.modules.find((m) => m.id === a.module_id)
+                            ?.published_at && (
+                            <button
+                              className="secondary"
+                              disabled={busy}
+                              onClick={() =>
+                                setAttemptAction(targetFor(a, "publish_result"))
+                              }
+                            >
+                              Опубликовать результат
+                            </button>
+                          )}
+                        {superadmin && (
+                          <button
+                            className="danger"
+                            disabled={busy}
+                            onClick={() =>
+                              setAttemptAction(targetFor(a, "delete_attempt"))
+                            }
+                          >
+                            Удалить навсегда
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1371,6 +1526,25 @@ export function TeacherPage({ user }: { user: string }) {
             )}
           </div>
         </section>
+      )}
+      {attemptAction && (
+        <AttemptActionDialog
+          target={attemptAction}
+          busy={busy}
+          onClose={() => setAttemptAction(null)}
+          onSubmit={async (payload) => {
+            if (busy) throw new Error("Дождитесь завершения операции");
+            setBusy(true);
+            setError("");
+            try {
+              await rpc("admin_attempt_action", payload);
+              await cache.invalidateQueries({ queryKey: ["admin"] });
+              setMessage("Операция сохранена в журнале");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
       )}
     </main>
   );

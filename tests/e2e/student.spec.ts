@@ -4,6 +4,9 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
   page,
 }) => {
   let finished = false,
+    annulled = false,
+    retake = false,
+    aid = "a1",
     published = false,
     index = 1;
   const user = {
@@ -16,7 +19,10 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
     created_at: new Date().toISOString(),
   };
   const snapshot = () => ({
-    attempt_id: "a1",
+    attempt_id: aid,
+    annulled,
+    void_reason: annulled ? "Телефон выключился" : undefined,
+    attempt_number: aid === "a1" ? 1 : 2,
     done: finished,
     published,
     title: "Growing Landing",
@@ -68,10 +74,20 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
           total_seconds: 600,
           max_score: 10,
           available: true,
-          attempt_id: index > 1 ? "a1" : null,
+          attempt_id: retake ? null : index > 1 ? aid : null,
+          retake_allowed: retake,
+          retake_deadline: new Date(Date.now() + 3600000).toISOString(),
+          retake_reason: "Телефон выключился",
         },
       ];
-    else if (p.endsWith("/attempt_submit_answer")) {
+    else if (p.endsWith("/attempt_start_or_resume") && retake) {
+      retake = false;
+      annulled = false;
+      finished = false;
+      index = 1;
+      aid = "a2";
+      data = snapshot();
+    } else if (p.endsWith("/attempt_submit_answer")) {
       index++;
       data = { ...snapshot(), outcome: "accepted" };
     } else data = snapshot();
@@ -105,4 +121,18 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
   await page.reload();
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await expect(page.getByText("Правильных ответов: 20 из 20")).toBeVisible();
+  annulled = true;
+  published = false;
+  await page.reload();
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Попытка аннулирована" }),
+  ).toBeVisible();
+  retake = true;
+  await page
+    .getByRole("button", { name: "К списку экзаменов", exact: true })
+    .click();
+  await expect(page.getByText(/Вам разрешена повторная попытка/)).toBeVisible();
+  await page.getByRole("button", { name: "Начать пересдачу" }).click();
+  await expect(page.getByText("Вопрос 1 / 20")).toBeVisible();
 });

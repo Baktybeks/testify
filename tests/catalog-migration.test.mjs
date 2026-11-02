@@ -11,7 +11,8 @@ test("catalog upgrade preserves existing exams, questions, attempts and publishe
     const files = (await readdir("supabase/migrations"))
       .filter((f) => f.endsWith(".sql"))
       .sort();
-    for (const file of files.filter((f) => !f.includes("subject_catalog")))
+    const catalogIndex = files.findIndex((f) => f.includes("subject_catalog"));
+    for (const file of files.slice(0, catalogIndex))
       await db.exec(await readFile("supabase/migrations/" + file, "utf8"));
     const uid = crypto.randomUUID();
     await db.exec(
@@ -57,13 +58,8 @@ test("catalog upgrade preserves existing exams, questions, attempts and publishe
     const before = (
       await db.query("select public.attempt_current($1) state", [aid])
     ).rows[0].state;
-    await db.exec(
-      await readFile(
-        "supabase/migrations/" +
-          files.find((f) => f.includes("subject_catalog")),
-        "utf8",
-      ),
-    );
+    for (const file of files.slice(catalogIndex))
+      await db.exec(await readFile("supabase/migrations/" + file, "utf8"));
     const after = (
       await db.query("select public.attempt_current($1) state", [aid])
     ).rows[0].state;

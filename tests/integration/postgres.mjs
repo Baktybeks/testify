@@ -117,6 +117,91 @@ test(
         [a.attempt_id],
       );
       assert.equal(count.rows[0].n, 1);
+      const current = (
+        await clients[0].query("select public.attempt_current($1) result", [
+          a.attempt_id,
+        ])
+      ).rows[0].result;
+      await Promise.all([
+        clients[0].query("select public.attempt_submit_answer($1,$2,$3,$4)", [
+          a.attempt_id,
+          2,
+          current.options[0].id,
+          crypto.randomUUID(),
+        ]),
+        setup.query("select public.admin_attempt_action($1,$2,$3,$4,$5,$6)", [
+          "grant_retake",
+          id,
+          "S1",
+          "Concurrent technical retry",
+          crypto.randomUUID(),
+          a.attempt_id,
+        ]),
+      ]);
+      const replacements = await Promise.all(
+        clients.map(
+          async (c) =>
+            (
+              await c.query(
+                "select public.attempt_start_or_resume($1) result",
+                [id],
+              )
+            ).rows[0].result,
+        ),
+      );
+      assert.equal(new Set(replacements.map((r) => r.attempt_id)).size, 1);
+      assert.equal(replacements[0].attempt_number, 2);
+      assert.equal(
+        (
+          await setup.query(
+            "select count(*)::int n from exam_private.attempts where module_id=$1 and is_current",
+            [id],
+          )
+        ).rows[0].n,
+        1,
+      );
+      // Force admin-first lock order while a student answer is already waiting.
+      await setup.query("begin");
+      await setup.query(
+        "select 1 from exam_private.modules where id=$1 for update",
+        [id],
+      );
+      const second = replacements[0];
+      const waitingAnswer = clients[0]
+        .query("select public.attempt_submit_answer($1,$2,$3,$4) result", [
+          second.attempt_id,
+          1,
+          second.options[0].id,
+          crypto.randomUUID(),
+        ])
+        .then(
+          (value) => ({ value }),
+          (error) => ({ error }),
+        );
+      await setup.query(
+        "select public.admin_attempt_action($1,$2,$3,$4,$5,$6)",
+        [
+          "grant_retake",
+          id,
+          "S1",
+          "Admin-first lock regression",
+          crypto.randomUUID(),
+          second.attempt_id,
+        ],
+      );
+      await setup.query("commit");
+      const settled = await waitingAnswer;
+      assert.equal(settled.error, undefined);
+      assert.equal(settled.value.rows[0].result.annulled, true);
+      assert.equal(
+        (
+          await setup.query(
+            "select count(*)::int n from exam_private.answers where attempt_id=$1",
+            [second.attempt_id],
+          )
+        ).rows[0].n,
+        0,
+      );
     } finally {
       await Promise.all(clients.map((c) => c.end()));
       await setup.end();

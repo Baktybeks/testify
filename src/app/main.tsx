@@ -101,8 +101,9 @@ function App() {
               Аккаунт заблокирован. Обратитесь к преподавателю.
             </div>
           </main>
-        ) : profile.data.role === "teacher" ? (
-          <TeacherPage user={user} />
+        ) : profile.data.role === "teacher" ||
+          profile.data.role === "superadmin" ? (
+          <TeacherPage user={user} role={profile.data.role} />
         ) : (
           <StudentPage user={user} />
         )}

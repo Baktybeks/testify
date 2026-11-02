@@ -91,7 +91,7 @@ export function StudentPage({ user }: { user: string }) {
     };
   }, [current]);
   useEffect(() => {
-    if (!current?.done || current.published) return;
+    if (!current?.done || current.published || current.annulled) return;
     const t = setInterval(() => void refresh(), 15000);
     return () => clearInterval(t);
   }, [current]);
@@ -176,11 +176,13 @@ export function StudentPage({ user }: { user: string }) {
               .map((m) => (
                 <article className="card module-card" key={m.id}>
                   <span className="pill">
-                    {m.attempt_status === "finished"
-                      ? "Завершён"
-                      : m.available
-                        ? "Доступен"
-                        : "Приём закрыт"}
+                    {m.retake_allowed && !m.attempt_id
+                      ? "Разрешена пересдача"
+                      : m.attempt_status === "finished"
+                        ? "Завершён"
+                        : m.available
+                          ? "Доступен"
+                          : "Приём закрыт"}
                   </span>
                   <p className="eyebrow catalog-path">
                     {m.subject_name} · {m.course_module_title}
@@ -198,9 +200,28 @@ export function StudentPage({ user }: { user: string }) {
                     </span>
                   </div>
                   <p className="muted">
-                    Одна попытка. Вернуться к предыдущему вопросу нельзя. После
-                    старта время идёт даже при закрытой вкладке.
+                    Повторная попытка — по разрешению преподавателя. Вернуться к
+                    предыдущему вопросу нельзя. После старта время идёт даже при
+                    закрытой вкладке.
                   </p>
+                  {m.retake_allowed && !m.attempt_id && (
+                    <p className="notice">
+                      Вам разрешена повторная попытка. Начните до{" "}
+                      {m.retake_deadline
+                        ? new Date(m.retake_deadline).toLocaleString("ru-RU", {
+                            timeZone: "Asia/Bishkek",
+                          })
+                        : "указанного срока"}{" "}
+                      (Бишкек).
+                      <br />
+                      Причина: {m.retake_reason}
+                    </p>
+                  )}
+                  {m.needs_retake && (
+                    <p className="muted">
+                      Для нового запуска требуется разрешение преподавателя.
+                    </p>
+                  )}
                   <button
                     className="primary full"
                     disabled={pending || (!m.available && !m.attempt_id)}
@@ -212,11 +233,13 @@ export function StudentPage({ user }: { user: string }) {
                       )
                     }
                   >
-                    {m.attempt_status === "finished"
-                      ? "Посмотреть результат"
-                      : m.attempt_id
-                        ? "Продолжить"
-                        : "Начать экзамен →"}
+                    {m.retake_allowed && !m.attempt_id
+                      ? "Начать пересдачу →"
+                      : m.attempt_status === "finished"
+                        ? "Посмотреть результат"
+                        : m.attempt_id
+                          ? "Продолжить"
+                          : "Начать экзамен →"}
                   </button>
                 </article>
               ))}
@@ -249,8 +272,13 @@ export function StudentPage({ user }: { user: string }) {
           <p className="muted">
             {current.subject_name} · {current.course_module_title}
           </p>
-          <h1>Тест завершён</h1>
-          {current.published ? (
+          <h1>{current.annulled ? "Попытка аннулирована" : "Тест завершён"}</h1>
+          {current.annulled ? (
+            <p className="muted">
+              Причина: {current.void_reason}. Вернитесь к списку экзаменов,
+              чтобы проверить разрешение на новую попытку.
+            </p>
+          ) : current.published ? (
             <>
               <p>Ваш результат</p>
               <div className="score">
@@ -270,10 +298,11 @@ export function StudentPage({ user }: { user: string }) {
             className="secondary"
             onClick={() => {
               setCurrent(null);
+              command.current = null;
               void modules.refetch();
             }}
           >
-            К списку модулей
+            К списку экзаменов
           </button>
         </section>
       ) : (

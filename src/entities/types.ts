@@ -1,10 +1,16 @@
 export type Profile = {
   id: string;
-  role: "student" | "teacher";
+  role: "student" | "teacher" | "superadmin";
   full_name: string;
   active: boolean;
 };
 export type Module = {
+  published_at?: string | null;
+  retake_allowed?: boolean;
+  retake_deadline?: string | null;
+  retake_reason?: string | null;
+  needs_retake?: boolean;
+  attempt_number?: number;
   course_module_id?: string;
   course_module_title?: string;
   subject_id?: string;
@@ -23,6 +29,9 @@ export type Module = {
   attempt_status?: string;
 };
 export type Current = {
+  annulled?: boolean;
+  void_reason?: string;
+  attempt_number?: number;
   course_module_title?: string;
   subject_name?: string;
   attempt_id: string;
@@ -61,6 +70,13 @@ export type Question = {
   active: boolean;
 };
 export type Attempt = {
+  student_id: string;
+  login: string;
+  attempt_number: number;
+  is_current: boolean;
+  void_reason: string | null;
+  voided_by_name: string | null;
+  result_published_at: string | null;
   module_id: string;
   id: string;
   full_name: string;
@@ -74,6 +90,14 @@ export type Attempt = {
   score: number | null;
 };
 export type AdminData = {
+  actor_role?: "teacher" | "superadmin";
+  attempt_counters?: {
+    module_id: string;
+    student_id: string;
+    started_count: number;
+    last_number: number;
+  }[];
+  retake_grants?: RetakeGrant[];
   subjects: { id: string; name: string }[];
   course_modules: {
     id: string;
@@ -100,4 +124,18 @@ export type AdminData = {
     finished: number;
     average: number | null;
   };
+};
+export type RetakeGrant = {
+  id: string;
+  module_id: string;
+  student_id: string;
+  full_name: string;
+  login: string;
+  group_id: string;
+  actor_name: string;
+  reason: string;
+  granted_at: string;
+  start_deadline: string;
+  consumed_at: string | null;
+  revoked_at: string | null;
 };

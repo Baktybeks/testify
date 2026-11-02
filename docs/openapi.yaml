@@ -21,7 +21,7 @@ paths:
                 type: object
                 properties:
                   id: { type: string, format: uuid }
-                  role: { type: string, enum: [student, teacher] }
+                  role: { type: string, enum: [student, teacher, superadmin] }
                   full_name: { type: string }
                   active: { type: boolean }
         default: { $ref: "#/components/responses/Error" }
@@ -164,6 +164,45 @@ paths:
       responses:
         "200": { description: Command committed; ok=true }
         default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_attempt_action:
+    post:
+      operationId: adminAttemptAction
+      description: Role-gated, audited and idempotent retake/deletion/publication operation. Deletion requires superadmin and the student's exact login.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_action, p_module_id, p_student_id, p_reason, p_key]
+              properties:
+                p_action:
+                  {
+                    type: string,
+                    enum:
+                      [
+                        grant_retake,
+                        revoke_retake,
+                        delete_attempt,
+                        publish_result,
+                      ],
+                  }
+                p_module_id: { type: string, format: uuid }
+                p_student_id: { type: string }
+                p_reason: { type: string, minLength: 3, maxLength: 1000 }
+                p_key: { type: string, format: uuid }
+                p_attempt_id: { type: string, format: uuid, nullable: true }
+                p_start_deadline:
+                  { type: string, format: date-time, nullable: true }
+                p_confirmation: { type: string, nullable: true }
+                p_grant_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          {
+            description: Committed,
+            or the previous response for the same request key,
+          }
+        default: { $ref: "#/components/responses/Error" }
   /functions/v1/manage-account:
     post:
       operationId: manageAccount
@@ -240,6 +279,9 @@ components:
             properties:
               attempt_id: { type: string, format: uuid }
               done: { type: boolean }
+              annulled: { type: boolean }
+              void_reason: { type: string }
+              attempt_number: { type: integer, minimum: 1 }
               title: { type: string }
               subject_name: { type: string }
               course_module_title: { type: string }

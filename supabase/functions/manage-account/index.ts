@@ -34,7 +34,11 @@ Deno.serve(async (req) => {
     if (authError || !user) return reply({ error: "Сессия истекла" }, 401);
     const { data: profile, error: profileError } =
       await caller.rpc("my_profile");
-    if (profileError || profile?.role !== "teacher" || !profile.active)
+    if (
+      profileError ||
+      !["teacher", "superadmin"].includes(profile?.role) ||
+      !profile.active
+    )
       return reply({ error: "Доступ запрещён" }, 403);
     const service = createClient(
       url,

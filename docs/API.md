@@ -45,6 +45,16 @@ Current активной попытки: `{attempt_id,done:false,title,index,tot
 | save_questions | module_id,questions:[{external_id,lecture,difficulty,text,options:string[4],correct:0..3,active:boolean}] |
 | delete_question | module_id,id:uuid |
 
+## Управление попытками
+
+`POST /rest/v1/rpc/admin_attempt_action`:
+
+`{p_action,p_module_id,p_student_id,p_reason,p_key,p_attempt_id?,p_start_deadline?,p_confirmation?,p_grant_id?}`.
+
+Действия: grant_retake (teacher до публикации, superadmin после), revoke_retake (те же права), delete_attempt (только superadmin), publish_result (только superadmin). Причина обязательна, 3–1000 символов. p_key — UUID идемпотентности, повтор с другим payload запрещён. Для grant_retake необязательный p_attempt_id проверяет актуальность выбранной попытки; без него можно выдать разрешение после удаления. p_start_deadline — срок начала в UTC, по умолчанию 24 часа. delete_attempt требует точный логин в p_confirmation. publish_result разрешён только для завершённой действующей попытки уже опубликованного экзамена. Повторная выдача отзовёт прежнее неиспользованное разрешение. Старты на архивном/черновом экзамене запрещены.
+
+admin_data дополнительно возвращает actor_role, attempt_counters и retake_grants. Попытки имеют is_current, attempt_number, void_reason, voided_by_name и result_published_at; аннулированные показываются со status=annulled. student_modules возвращает retake_allowed, retake_deadline, retake_reason, needs_retake и attempt_number. Current аннулированной попытки: done=true, annulled=true, void_reason, published=false без score/correct. Current новой завершённой пересдачи скрывает score/correct до публикации её результата.
+
 ## Аккаунты
 
 `POST /functions/v1/manage-account`, с Authorization и допустимым Origin:

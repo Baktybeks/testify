@@ -1,4 +1,35 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #15213d80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  overflow: auto;
+}
+.action-dialog {
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100dvh - 36px);
+  overflow: auto;
+  white-space: normal;
+  margin: 0;
+  box-shadow: 0 20px 70px #101d4040;
+}
+.action-dialog small {
+  font-weight: 500;
+  color: #6c7890;
+  display: block;
+  margin-bottom: 15px;
+}
+.reason-cell {
+  white-space: normal;
+  min-width: 170px;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
 :root {
   font-family: Manrope, system-ui, sans-serif;
   color: #17233d;
