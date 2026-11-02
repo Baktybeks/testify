@@ -21,6 +21,68 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("unused exam deletion checks role, title, state and retained history", async () => {
+  const mid = await module();
+  await as(student);
+  await assert.rejects(() => call("admin_delete_unused_exam", [mid, "Test"]));
+  await as(teacher);
+  const title = (
+    await db.query("select title from exam_private.modules where id=$1", [mid])
+  ).rows[0].title;
+  await assert.rejects(
+    () => call("admin_delete_unused_exam", [mid, "wrong"]),
+    /название/,
+  );
+  await db.query("update exam_private.modules set status='open' where id=$1", [
+    mid,
+  ]);
+  await assert.rejects(
+    () => call("admin_delete_unused_exam", [mid, title]),
+    /черновик/,
+  );
+  await db.query("update exam_private.modules set status='draft' where id=$1", [
+    mid,
+  ]);
+  await db.query(
+    "insert into exam_private.attempt_slots(module_id,student_id,started_count,last_number) values($1,'S1',1,1)",
+    [mid],
+  );
+  await assert.rejects(
+    () => call("admin_delete_unused_exam", [mid, title]),
+    /история/,
+  );
+  await db.query("delete from exam_private.attempt_slots where module_id=$1", [
+    mid,
+  ]);
+  await call("admin_delete_unused_exam", [mid, title]);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from exam_private.modules where id=$1",
+        [mid],
+      )
+    ).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from exam_private.questions where module_id=$1",
+        [mid],
+      )
+    ).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from exam_private.audit_logs where action='unused_exam_deleted' and target=$1",
+        [mid],
+      )
+    ).rows[0].n,
+    1,
+  );
+});
 test("teacher management is superadmin-only and never assigns superadmin to a new teacher", async () => {
   await as(teacher);
   await assert.rejects(() => call("superadmin_teachers"), /суперадмин/i);

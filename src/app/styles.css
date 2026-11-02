@@ -876,3 +876,11 @@ td button {
     padding: 25px;
   }
 }
+.student-accordion > summary {
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.student-accordion[open] > summary {
+  margin-bottom: 20px;
+}

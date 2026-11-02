@@ -203,6 +203,23 @@ paths:
             or the previous response for the same request key,
           }
         default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_delete_unused_exam:
+    post:
+      operationId: adminDeleteUnusedExam
+      description: Teacher-only removal of a draft without attempts, counters or retake grants. Deletes its questions and group access. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_module_id, p_confirmation]
+              properties:
+                p_module_id: { type: string, format: uuid }
+                p_confirmation: { type: string, description: Exact exam title }
+      responses:
+        "200": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
   /rest/v1/rpc/superadmin_teachers:
     post:
       operationId: superadminTeachers

@@ -70,7 +70,8 @@ export function TeacherPage({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
-    [code, setCode] = useState("");
+    [code, setCode] = useState(""),
+    [codeLogin, setCodeLogin] = useState("");
   const [moduleForm, setModuleForm] = useState(blankModule),
     [editing, setEditing] = useState(""),
     [question, setQuestion] = useState<Question>(blankQuestion),
@@ -662,6 +663,28 @@ export function TeacherPage({
                 >
                   Создать копию
                 </button>
+                {m.status === "draft" && (
+                  <button
+                    className="danger"
+                    disabled={busy}
+                    onClick={() => {
+                      const title = prompt(
+                        `Удалить черновик «${m.title}» и его банк вопросов? Введите название экзамена для подтверждения. Экзамен с историей попыток удалить нельзя.`,
+                      );
+                      if (title === null) return;
+                      void run(async () => {
+                        await rpc("admin_delete_unused_exam", {
+                          p_module_id: m.id,
+                          p_confirmation: title,
+                        });
+                        if (mid === m.id) setMid("");
+                        if (editing === m.id) setEditing("");
+                      }, "Черновик экзамена удалён");
+                    }}
+                  >
+                    Удалить экзамен
+                  </button>
+                )}
                 {m.status === "open" && (
                   <button
                     className="secondary"
@@ -874,15 +897,48 @@ export function TeacherPage({
       )}
       {tab === "Студенты" && (
         <>
-          <StudentJsonImport
-            groups={d.groups}
-            disabled={busy}
-            onImported={async () => {
-              await data.refetch();
-            }}
-          />
-          <section className="card">
-            <h2>Новый студент</h2>
+          {code && (
+            <div className="dialog-backdrop">
+              <section
+                className="action-dialog card"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Новый пароль студента"
+              >
+                <h2>Новый пароль студента</h2>
+                <p>
+                  Логин: <b>{codeLogin}</b>
+                </p>
+                <p>
+                  Передайте пароль студенту. Он показан здесь и не отправляется
+                  по почте.
+                </p>
+                <code className="access-code">{code}</code>
+                <button
+                  autoFocus
+                  className="primary"
+                  onClick={() => {
+                    setCode("");
+                    setCodeLogin("");
+                  }}
+                >
+                  Закрыть
+                </button>
+              </section>
+            </div>
+          )}
+          <details className="card student-accordion">
+            <summary>Импорт студентов из JSON</summary>
+            <StudentJsonImport
+              groups={d.groups}
+              disabled={busy}
+              onImported={async () => {
+                await data.refetch();
+              }}
+            />
+          </details>
+          <details className="card student-accordion">
+            <summary>Новый студент</summary>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -895,6 +951,7 @@ export function TeacherPage({
                     group_id: f.get("group"),
                   });
                   setCode(r.code || "");
+                  setCodeLogin(String(f.get("login") || ""));
                 });
               }}
             >
@@ -926,18 +983,9 @@ export function TeacherPage({
                 Создать и выдать код
               </button>
             </form>
-            {code && (
-              <div className="notice">
-                <p>Новый личный код. Передайте только этому студенту.</p>
-                <code className="access-code">{code}</code>
-                <button className="ghost" onClick={() => setCode("")}>
-                  Скрыть
-                </button>
-              </div>
-            )}
-          </section>
-          <section className="card">
-            <h2>Массовый импорт</h2>
+          </details>
+          <details className="card student-accordion">
+            <summary>Массовый импорт</summary>
             <p className="muted">
               Колонки StudentID, FullName, GroupID, Login, Status. Старые
               AccessCode игнорируются. Новые коды выгружаются отдельным
@@ -993,9 +1041,9 @@ export function TeacherPage({
                 </button>
               </>
             )}
-          </section>
-          <section className="card">
-            <h2>Студенты · {d.students.length}</h2>
+          </details>
+          <details className="card student-accordion" open>
+            <summary>Студенты · {d.students.length}</summary>
             <input
               aria-label="Поиск студентов"
               placeholder="Поиск по ФИО, логину или ID"
@@ -1080,6 +1128,7 @@ export function TeacherPage({
                                       id: s.id,
                                     });
                                     setCode(r.code || "");
+                                    setCodeLogin(s.login);
                                   });
                               }}
                             >
@@ -1092,7 +1141,7 @@ export function TeacherPage({
                 </tbody>
               </table>
             </div>
-          </section>
+          </details>
         </>
       )}
       {tab === "Вопросы" &&

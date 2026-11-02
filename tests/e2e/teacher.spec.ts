@@ -95,6 +95,12 @@ test("teacher dashboard, module settings and validated CSV import", async ({
         window_end: null,
       }));
       data = { ok: true, module_id: "m1" };
+    } else if (path.endsWith("/admin_delete_unused_exam")) {
+      commands.push({
+        p_action: "delete_unused_exam",
+        p_data: route.request().postDataJSON(),
+      });
+      data = { deleted: true };
     } else if (path.endsWith("/admin_command")) {
       commands.push(route.request().postDataJSON());
       data = { ok: true, module_id: "m1" };
@@ -179,6 +185,7 @@ test("teacher dashboard, module settings and validated CSV import", async ({
   ).toBeDisabled();
   await expect(page.getByText("Импорт пока недоступен:")).toBeVisible();
   await page.getByRole("button", { name: "Студенты", exact: true }).click();
+  await page.getByText("Импорт студентов из JSON", { exact: true }).click();
   await page.getByLabel("Группа для записей без group").selectOption("G1");
   await page.getByLabel("JSON со студентами").fill(
     JSON.stringify([
@@ -207,9 +214,12 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     page.getByLabel("Общий пароль для записей без password"),
   ).toHaveValue("");
   await expect(page.getByText("Уже существует — пропущен")).toBeVisible();
+  await page.getByText("Новый студент", { exact: true }).click();
   const manual = page
-    .getByRole("heading", { name: "Новый студент", exact: true })
-    .locator("..");
+    .locator("details")
+    .filter({
+      has: page.locator("summary").getByText("Новый студент", { exact: true }),
+    });
   await expect(manual.getByLabel("StudentID", { exact: true })).toHaveCount(0);
   await manual.getByLabel("ФИО", { exact: true }).fill("Новый студент");
   await manual.getByLabel("Логин", { exact: true }).fill("manual_student");
@@ -221,7 +231,24 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     .click();
   await expect.poll(() => accounts.length).toBe(3);
   expect(accounts[2]).not.toHaveProperty("id");
+  const issued = page.getByRole("dialog", { name: "Новый пароль студента" });
+  await expect(issued).toContainText("manual_student");
+  await expect(issued).toContainText("Random-test-2026!");
+  await issued.getByRole("button", { name: "Закрыть", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Новый код", exact: true }).click();
+  await expect(issued).toContainText("already_exists");
+  await expect(issued).toContainText("Random-test-2026!");
+  expect(accounts[3]).toEqual({ action: "reset", id: "S0" });
+  await issued.getByRole("button", { name: "Закрыть", exact: true }).click();
   await page.getByRole("button", { name: "Экзамены", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept(module.title));
+  await page
+    .getByRole("button", { name: "Удалить экзамен", exact: true })
+    .click();
+  await expect
+    .poll(() => commands.some((c) => c.p_action === "delete_unused_exam"))
+    .toBeTruthy();
   const open = page.getByRole("button", {
     name: "Открыть экзамен для выбранных групп",
     exact: true,
