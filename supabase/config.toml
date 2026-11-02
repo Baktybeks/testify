@@ -1,0 +1,19 @@
+project_id = "testify"
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+[db]
+port = 54322
+major_version = 17
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["https://baktybeks.github.io/testify/"]
+enable_signup = false
+minimum_password_length = 12
+[auth.email]
+enable_signup = false
+[functions.manage-account]
+verify_jwt = false

@@ -1,0 +1,23 @@
+# Проверки 2 ноября 2026
+
+Локальное окружение: Windows, Node.js 24, PostgreSQL 18, Edge. CI использует Node.js 24, PostgreSQL 17 и Chromium.
+
+| Проверка | Результат |
+|---|---|
+| npm run build | Пройдена, TypeScript strict и Vite production |
+| npm test | 7 тестов: FSD и реальный PL/pgSQL на PGlite |
+| npm run test:postgres | Пройдена: 8 независимых соединений, конкурентные старты и ответы |
+| Мобильный E2E студента | Пройден: вход, ответ, reload/resume, скрытый/опубликованный результат (mock API) |
+| E2E преподавателя | Пройден: панель, настройки модуля, импорт CSV и отказ при ошибках (mock API) |
+| Облачные миграции | Применены в frnpbbpmxpmlpkhunzxd |
+| manage-account | Развёрнута, ACTIVE |
+| Анонимный вызов admin_data | HTTP 401 |
+| Неавторизованный вызов manage-account | HTTP 401 |
+| Исходный банк | 60 вопросов, 6 групп, модуль DRAFT, доступ закрыт |
+| 150/300 студентов | Не измерено; есть сценарий k6 |
+
+Supabase Security Advisor сообщает INFO RLS Enabled No Policy для закрытых таблиц: это намеренный запрет прямого клиентского доступа. WARN Signed-In Users Can Execute SECURITY DEFINER Function относится к выбранным RPC: они намеренно доступны authenticated и проверяют роль/владельца внутри функции. Приватные helper/service функции браузеру не разрешены. Эти предупреждения не скрываются и требуют повторного обзора при изменениях схемы.
+
+Справка: [RLS без policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy), [SECURITY DEFINER RPC](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable).
+
+На момент проверки публичная регистрация Auth ещё разрешена в облачном проекте; её нужно отключить через Dashboard → Authentication → Sign In / Providers → Allow new users to sign up. Без private profile зарегистрированный аккаунт не получает данных приложения. Пользователь создал первый аккаунт самостоятельно; роль teacher назначена и подтверждена запросом. Pages enablement остаётся отдельным шагом подключения.

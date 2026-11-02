@@ -1,0 +1,228 @@
+openapi: 3.0.3
+info:
+  title: Testify Supabase API
+  version: 1.0.0
+  description: Authenticated RPC API. See API.md for administrative command payloads and error mappings.
+servers:
+  - url: https://YOUR_PROJECT.supabase.co
+security:
+  - bearerAuth: []
+    apiKey: []
+paths:
+  /rest/v1/rpc/my_profile:
+    post:
+      operationId: myProfile
+      responses:
+        "200":
+          description: Active profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  role: { type: string, enum: [student, teacher] }
+                  full_name: { type: string }
+                  active: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/student_modules:
+    post:
+      operationId: studentModules
+      responses:
+        "200":
+          description: Assigned modules and existing attempts
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/attempt_start_or_resume:
+    post:
+      operationId: startOrResume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_module_id]
+              properties:
+                p_module_id: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Current" }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/attempt_current:
+    post:
+      operationId: currentAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_attempt_id]
+              properties:
+                p_attempt_id: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Current" }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/attempt_submit_answer:
+    post:
+      operationId: submitAnswer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_attempt_id, p_position, p_option_id, p_key]
+              properties:
+                p_attempt_id: { type: string, format: uuid }
+                p_position: { type: integer, minimum: 1 }
+                p_option_id: { type: string, format: uuid }
+                p_key: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Current" }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_data:
+    post:
+      operationId: adminData
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                p_module_id: { type: string, format: uuid, nullable: true }
+                p_group_id: { type: string, nullable: true }
+      responses:
+        "200":
+          {
+            description: Teacher dashboard with modules/groups/students/attempts/stats,
+          }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_questions:
+    post:
+      operationId: adminQuestions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_module_id]
+              properties:
+                p_module_id: { type: string, format: uuid }
+      responses:
+        "200": { description: Teacher-only question bank }
+        default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_command:
+    post:
+      operationId: adminCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_action, p_data]
+              properties:
+                p_action:
+                  type: string
+                  enum:
+                    [
+                      save_module,
+                      copy_module,
+                      transition,
+                      save_group,
+                      delete_group,
+                      group_access,
+                      student_status,
+                      rename_student,
+                      save_questions,
+                      delete_question,
+                    ]
+                p_data: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Command committed; ok=true }
+        default: { $ref: "#/components/responses/Error" }
+  /functions/v1/manage-account:
+    post:
+      operationId: manageAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, id]
+              properties:
+                action: { type: string, enum: [create, reset] }
+                id: { type: string }
+                login: { type: string }
+                full_name: { type: string }
+                group_id: { type: string }
+      responses:
+        "200":
+          description: Code shown once
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  code: { type: string }
+        default:
+          description: Edge error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    apiKey: { type: apiKey, in: header, name: apikey }
+  responses:
+    Error:
+      description: PostgREST error (400/401/403/409/429/5xx, depending on operation)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string }
+              details: { type: string, nullable: true }
+              hint: { type: string, nullable: true }
+    Current:
+      description: Current server-authoritative attempt; no answer keys
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              [attempt_id, done, title, total, server_now, attempt_deadline]
+            properties:
+              attempt_id: { type: string, format: uuid }
+              done: { type: boolean }
+              title: { type: string }
+              index: { type: integer, minimum: 1 }
+              total: { type: integer }
+              question: { type: string }
+              options:
+                type: array
+                items:
+                  type: object
+                  required: [id, text]
+                  properties:
+                    id: { type: string, format: uuid }
+                    text: { type: string }
+              server_now: { type: string, format: date-time }
+              question_deadline: { type: string, format: date-time }
+              attempt_deadline: { type: string, format: date-time }
+              outcome: { type: string, enum: [accepted, expired_or_stale] }
+              published: { type: boolean }
+              score: { type: number }
+              correct: { type: integer }
+              max_score: { type: number }
