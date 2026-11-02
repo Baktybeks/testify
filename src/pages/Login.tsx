@@ -62,7 +62,7 @@ export function Login() {
           <p className="muted">
             {teacher
               ? "Войдите, чтобы управлять экзаменами."
-              : "Введите логин и личный код от преподавателя."}
+              : "Введите логин и пароль или личный код от преподавателя."}
           </p>
           <form onSubmit={submit}>
             <label>
@@ -79,14 +79,14 @@ export function Login() {
               />
             </label>
             <label>
-              {teacher ? "Пароль" : "Личный код"}
+              Пароль
               <input
                 type="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Введите код доступа"
+                placeholder="Введите пароль или личный код"
               />
             </label>
             {error && (

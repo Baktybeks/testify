@@ -48,8 +48,10 @@ Current активной попытки: `{attempt_id,done:false,title,index,tot
 
 `POST /functions/v1/manage-account`, с Authorization и допустимым Origin:
 
-- `{action:"create",id,login,full_name,group_id}` → `{id,code}`.
-- `{action:"reset",id}` → `{code}`.
+- `{action:"create",id,login,full_name,group_id,active?:boolean,password?:string}` → `{id,code}`.
+- `{action:"reset",id,password?:string}` → `{code}`.
+
+Необязательный password задаёт выбранный преподавателем пароль длиной 12–128 символов. При отсутствии генерируется случайный индивидуальный код. Возвращаемый code — фактически установленный пароль/код. Пароль не записывается в аудит. JSON-импорт вызывает create последовательно для каждой новой записи; общего batch endpoint нет. Существующие аккаунты пропускает клиент на основании свежего admin_data, ограничения уникальности дополнительно защищают базу.
 
 Только teacher. code возвращается один раз и не логируется. Создание Auth + профиля — две системы; при SQL-ошибке функция пытается удалить только что созданный Auth account. Ошибки компенсации логируются для ручной проверки.
 

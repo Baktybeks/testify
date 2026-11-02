@@ -82,9 +82,7 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
   });
   await page.goto("/");
   await page.getByLabel("Логин", { exact: true }).fill("student");
-  await page
-    .getByLabel("Личный код", { exact: true })
-    .fill("individual-secret");
+  await page.getByLabel("Пароль", { exact: true }).fill("individual-secret");
   await page.getByRole("button", { name: "Войти и продолжить" }).click();
   await page.getByRole("button", { name: "Начать экзамен" }).click();
   await expect(

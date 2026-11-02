@@ -9,6 +9,7 @@ import {
 } from "../features/files";
 import type { AdminData, Module, Question } from "../entities/types";
 import { CatalogManager } from "../features/CatalogManager";
+import { StudentJsonImport } from "../features/StudentJsonImport";
 const status: Record<string, string> = {
   draft: "Черновик",
   open: "Открыт",
@@ -826,6 +827,13 @@ export function TeacherPage({ user }: { user: string }) {
       )}
       {tab === "Студенты" && (
         <>
+          <StudentJsonImport
+            groups={d.groups}
+            disabled={busy}
+            onImported={async () => {
+              await data.refetch();
+            }}
+          />
           <section className="card">
             <h2>Новый студент</h2>
             <form

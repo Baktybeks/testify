@@ -13,6 +13,7 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     created_at: new Date().toISOString(),
   };
   const commands: Record<string, unknown>[] = [];
+  const accounts: Record<string, unknown>[] = [];
   const module = {
     id: "m1",
     title: "Новая партия · 90 вопросов",
@@ -59,7 +60,16 @@ test("teacher dashboard, module settings and validated CSV import", async ({
         ],
         modules: [module],
         groups: [{ id: "G1", name: "ПИ-1-26" }],
-        students: [],
+        students: [
+          {
+            id: "S0",
+            login: "already_exists",
+            full_name: "Existing Student",
+            group_id: "G1",
+            auth_id: "existing-id",
+            active: true,
+          },
+        ],
         attempts: [],
         module_groups: [],
         stats: {
@@ -75,6 +85,10 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     else if (path.endsWith("/admin_command")) {
       commands.push(route.request().postDataJSON());
       data = { ok: true, module_id: "m1" };
+    } else if (path.endsWith("/manage-account")) {
+      const body = route.request().postDataJSON();
+      accounts.push(body);
+      data = { id: body.id, code: body.password || "Random-test-2026!" };
     }
     await route.fulfill({ json: data });
   });
@@ -148,4 +162,33 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     page.getByRole("button", { name: "Импортировать 1 вопросов" }),
   ).toBeDisabled();
   await expect(page.getByText("Импорт пока недоступен:")).toBeVisible();
+  await page.getByRole("button", { name: "Студенты", exact: true }).click();
+  await page.getByLabel("Группа для записей без group").selectOption("G1");
+  await page.getByLabel("JSON со студентами").fill(
+    JSON.stringify([
+      { name: "Первый студент", login: "first_student" },
+      { name: "Уже существует", login: "already_exists" },
+      { name: "Второй студент", login: "second_student", status: "blocked" },
+    ]),
+  );
+  await page
+    .getByLabel("Общий пароль для записей без password")
+    .fill("Common-test-2026!");
+  await page
+    .getByRole("button", { name: "Проверить JSON", exact: true })
+    .click();
+  await expect(page.getByText("Готово к импорту: 3.")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Создать студентов из JSON", exact: true })
+    .click();
+  await expect(page.getByText("Импорт завершён.", { exact: true })).toBeVisible(
+    { timeout: 10000 },
+  );
+  expect(accounts).toHaveLength(2);
+  expect(accounts[0].password).toBe("Common-test-2026!");
+  expect(accounts[1].active).toBe(false);
+  await expect(
+    page.getByLabel("Общий пароль для записей без password"),
+  ).toHaveValue("");
+  await expect(page.getByText("Уже существует — пропущен")).toBeVisible();
 });

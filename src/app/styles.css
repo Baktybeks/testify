@@ -466,6 +466,14 @@ td button {
   font-weight: 800;
   overflow-wrap: anywhere;
 }
+.json-example {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  background: #f7f9fd;
+  padding: 15px;
+  border-radius: 10px;
+}
 .student-home {
   max-width: 1040px;
   padding-top: 55px;
