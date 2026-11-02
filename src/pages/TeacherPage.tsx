@@ -169,6 +169,10 @@ export function TeacherPage({
             errors.push(`Строка ${i + 2}: повтор ID или логина`);
           ids.add(r.StudentID);
           logins.add(r.Login);
+          if (r.Password && (r.Password.length < 8 || r.Password.length > 128))
+            errors.push(
+              `Строка ${i + 2}: пароль должен содержать 8–128 символов`,
+            );
         });
         setIssues(errors);
         setStudentRows(rows);
@@ -1005,9 +1009,10 @@ export function TeacherPage({
           <details className="card student-accordion">
             <summary>Массовый импорт</summary>
             <p className="muted">
-              Колонки StudentID, FullName, GroupID, Login, Status. Старые
-              AccessCode игнорируются. Новые коды выгружаются отдельным
-              приватным CSV.
+              Колонки StudentID, FullName, GroupID, Login, Status, Password
+              (необязательно). Если Password заполнен, он станет паролем
+              студента; иначе создаётся случайный код. Старые AccessCode
+              игнорируются. Новые коды выгружаются отдельным приватным CSV.
             </p>
             <input
               type="file"
@@ -1040,13 +1045,19 @@ export function TeacherPage({
                             full_name: r.FullName,
                             group_id: r.GroupID,
                             active: r.Status?.toLowerCase() !== "blocked",
+                            password: r.Password || undefined,
                           });
                           issued.push([r.StudentID, r.Login, result.code]);
                           remaining.shift();
+                          r.Password = "";
                           setStudentRows([...remaining]);
                           setMessage(
                             `Создано ${issued.length - 1} из ${studentRows.length}`,
                           );
+                          if (remaining.length)
+                            await new Promise((resolve) =>
+                              setTimeout(resolve, 2100),
+                            );
                         }
                       } finally {
                         if (issued.length > 1)

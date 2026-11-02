@@ -287,4 +287,20 @@ test("teacher dashboard, module settings and validated CSV import", async ({
       }
     ).p_group_ids,
   ).toEqual(["G1"]);
+  await page.getByRole("button", { name: "Студенты", exact: true }).click();
+  await page.getByText("Массовый импорт", { exact: true }).click();
+  await page
+    .getByLabel("Импорт студентов", { exact: true })
+    .setInputFiles({
+      name: "students.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(
+        "StudentID,FullName,GroupID,Login,Status,Password\nimport_student,Импорт Студент,G1,import_student,active,12345678",
+      ),
+    });
+  await page
+    .getByRole("button", { name: "Создать аккаунты", exact: true })
+    .click();
+  await expect.poll(() => accounts.length).toBe(5);
+  expect(accounts[4].password).toBe("12345678");
 });
