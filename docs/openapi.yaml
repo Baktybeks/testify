@@ -203,6 +203,13 @@ paths:
             or the previous response for the same request key,
           }
         default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/superadmin_teachers:
+    post:
+      operationId: superadminTeachers
+      description: Superadmin-only list of staff profiles and Auth email addresses. No passwords returned.
+      responses:
+        "200": { description: Staff array with id, full_name, email, role, active, created_at }
+        default: { $ref: "#/components/responses/Error" }
   /functions/v1/manage-account:
     post:
       operationId: manageAccount
@@ -219,8 +226,12 @@ paths:
                 - required: [id]
                   properties:
                     action: { enum: [reset] }
+                - required: [full_name, email, password]
+                  properties:
+                    action: { enum: [create-teacher] }
               properties:
-                action: { type: string, enum: [create, reset] }
+                action: { type: string, enum: [create, reset, create-teacher] }
+                email: { type: string, format: email }
                 id: { type: string }
                 login: { type: string }
                 full_name: { type: string }
@@ -235,7 +246,7 @@ paths:
                   }
       responses:
         "200":
-          description: Code shown once
+          description: Student code shown once; create-teacher is superadmin-only and returns the new teacher id without password.
           content:
             application/json:
               schema:

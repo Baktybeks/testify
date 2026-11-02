@@ -16,6 +16,7 @@ import {
   type AttemptActionTarget,
 } from "../features/AttemptActionDialog";
 import { RetakeControls, RetakeHistory } from "../features/RetakeControls";
+import { TeacherAccounts } from "../features/TeacherAccounts";
 const status: Record<string, string> = {
   draft: "Черновик",
   open: "Открыт",
@@ -297,6 +298,7 @@ export function TeacherPage({
       <nav className="tabs" aria-label="Разделы">
         {[
           "Обзор",
+          ...(superadmin ? ["Преподаватели"] : []),
           "Дисциплины",
           "Экзамены",
           "Группы",
@@ -319,84 +321,88 @@ export function TeacherPage({
           </button>
         ))}
       </nav>
-      <div className="filters">
-        <label>
-          Дисциплина
-          <select
-            aria-label="Дисциплина"
-            value={subjectId}
-            onChange={(e) => {
-              setSubjectId(e.target.value);
-              setCourseModuleId("");
-              setMid("");
-              setPreview([]);
-              setQuestion(blankQuestion);
-            }}
-          >
-            <option value="">Все дисциплины</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Модуль
-          <select
-            aria-label="Модуль"
-            value={courseModuleId}
-            onChange={(e) => {
-              setCourseModuleId(e.target.value);
-              setMid("");
-              setPreview([]);
-              setQuestion(blankQuestion);
-            }}
-          >
-            <option value="">Все учебные модули</option>
-            {courseModules
-              .filter((c) => !subjectId || c.subject_id === subjectId)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {!subjectId
-                    ? subjects.find((s) => s.id === c.subject_id)?.name + " · "
-                    : ""}
-                  {c.title}
+      {tab !== "Преподаватели" && (
+        <div className="filters">
+          <label>
+            Дисциплина
+            <select
+              aria-label="Дисциплина"
+              value={subjectId}
+              onChange={(e) => {
+                setSubjectId(e.target.value);
+                setCourseModuleId("");
+                setMid("");
+                setPreview([]);
+                setQuestion(blankQuestion);
+              }}
+            >
+              <option value="">Все дисциплины</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
-          </select>
-        </label>
-        <label>
-          Экзамен
-          <select
-            aria-label="Экзамен"
-            value={mid}
-            onChange={(e) => {
-              setMid(e.target.value);
-              setPreview([]);
-              setQuestion(blankQuestion);
-            }}
-          >
-            <option value="">Все экзамены</option>
-            {d.modules.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.title} · {status[m.status]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Группа
-          <select value={gid} onChange={(e) => setGid(e.target.value)}>
-            <option value="">Все группы</option>
-            {d.groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+            </select>
+          </label>
+          <label>
+            Модуль
+            <select
+              aria-label="Модуль"
+              value={courseModuleId}
+              onChange={(e) => {
+                setCourseModuleId(e.target.value);
+                setMid("");
+                setPreview([]);
+                setQuestion(blankQuestion);
+              }}
+            >
+              <option value="">Все учебные модули</option>
+              {courseModules
+                .filter((c) => !subjectId || c.subject_id === subjectId)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {!subjectId
+                      ? subjects.find((s) => s.id === c.subject_id)?.name +
+                        " · "
+                      : ""}
+                    {c.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Экзамен
+            <select
+              aria-label="Экзамен"
+              value={mid}
+              onChange={(e) => {
+                setMid(e.target.value);
+                setPreview([]);
+                setQuestion(blankQuestion);
+              }}
+            >
+              <option value="">Все экзамены</option>
+              {d.modules.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title} · {status[m.status]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Группа
+            <select value={gid} onChange={(e) => setGid(e.target.value)}>
+              <option value="">Все группы</option>
+              {d.groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {tab === "Преподаватели" && superadmin && <TeacherAccounts user={user} />}
       {tab === "Экзамены" && (
         <p className="muted">
           Фильтры сверху меняют отображение. Доступ групп выбирается в карточке

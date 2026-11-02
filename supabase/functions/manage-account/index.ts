@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { providedPassword } from "../_shared/password.ts";
 import { resolveStudentId } from "../_shared/student-id.ts";
+import { teacherInput } from "../_shared/teacher-input.ts";
 const url = Deno.env.get("SUPABASE_URL")!;
 const origin = Deno.env.get("ALLOWED_ORIGIN") || "https://baktybeks.github.io";
 const headers = {
@@ -56,6 +57,39 @@ Deno.serve(async (req) => {
     const b = JSON.parse(raw);
     if (!b || typeof b !== "object" || Array.isArray(b))
       throw new Error("Некорректный запрос");
+    if (b.action === "create-teacher") {
+      if (profile.role !== "superadmin")
+        return reply(
+          { error: "Создавать преподавателей может только суперадмин" },
+          403,
+        );
+      const input = teacherInput(b);
+      const { data, error } = await service.auth.admin.createUser({
+        email: input.email,
+        password: input.password,
+        email_confirm: true,
+      });
+      if (error) throw error;
+      const { error: dbError } = await service.rpc("service_register_teacher", {
+        p_actor: user.id,
+        p_auth_id: data.user.id,
+        p_name: input.full_name,
+      });
+      if (dbError) {
+        const { error: cleanup } = await service.auth.admin.deleteUser(
+          data.user.id,
+        );
+        if (cleanup)
+          console.error(
+            JSON.stringify({
+              event: "teacher_compensation_failed",
+              user_id: data.user.id,
+            }),
+          );
+        throw new Error(dbError.message);
+      }
+      return reply({ id: data.user.id });
+    }
     const password = providedPassword(b.password);
     const alphabet =
       "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";

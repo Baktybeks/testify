@@ -10,7 +10,7 @@ const teacher = "00000000-0000-0000-0000-000000000001",
 before(async () => {
   db = new PGlite();
   await db.exec(
-    `create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`,
+    `create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,created_at timestamptz default clock_timestamp());create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`,
   );
   for (const f of (await readdir("supabase/migrations"))
     .filter((f) => f.endsWith(".sql"))
@@ -21,6 +21,36 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("teacher management is superadmin-only and never assigns superadmin to a new teacher", async () => {
+  await as(teacher);
+  await assert.rejects(() => call("superadmin_teachers"), /суперадмин/i);
+  await as(student);
+  await assert.rejects(() => call("superadmin_teachers"));
+  const uid = "00000000-0000-0000-0000-000000000099";
+  await db.query("insert into auth.users(id,email) values($1,$2)", [
+    uid,
+    "newteacher@example.com",
+  ]);
+  await assert.rejects(
+    () =>
+      call("service_register_teacher", [teacher, uid, "Новый преподаватель"]),
+    /суперадмин/i,
+  );
+  await call("service_register_teacher", [boss, uid, "Новый преподаватель"]);
+  await as(boss);
+  const staff = await call("superadmin_teachers");
+  assert.equal(staff.find((s) => s.id === uid).role, "teacher");
+  assert.equal(staff.find((s) => s.id === uid).email, "newteacher@example.com");
+  const acl = await db.query(
+    "select has_function_privilege('authenticated','public.service_register_teacher(uuid,uuid,text)','execute') browser,has_function_privilege('service_role','public.service_register_teacher(uuid,uuid,text)','execute') service",
+  );
+  assert.deepEqual(acl.rows[0], { browser: false, service: true });
+  const audit = await db.query(
+    "select count(*)::int n from exam_private.audit_logs where action='teacher_created' and target=$1",
+    [uid],
+  );
+  assert.equal(audit.rows[0].n, 1);
+});
 async function attemptAction(action, mid, aid = null, options = {}) {
   return call("admin_attempt_action", [
     action,

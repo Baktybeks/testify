@@ -23,7 +23,7 @@ test(
           "Expected a fresh disposable database; no existing schemas will be deleted.",
         );
       await setup.query(
-        `do $roles$ declare r text; begin foreach r in array array['anon','authenticated','service_role'] loop if not exists(select 1 from pg_roles where rolname=r) then execute format('create role %I',r);end if;end loop;end $roles$;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`,
+        `do $roles$ declare r text; begin foreach r in array array['anon','authenticated','service_role'] loop if not exists(select 1 from pg_roles where rolname=r) then execute format('create role %I',r);end if;end loop;end $roles$;create schema auth;create table auth.users(id uuid primary key,email text,created_at timestamptz default clock_timestamp());create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`,
       );
       for (const f of (await readdir("supabase/migrations"))
         .filter((f) => f.endsWith(".sql"))

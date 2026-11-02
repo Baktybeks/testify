@@ -55,6 +55,7 @@ for (const role of ["teacher", "superadmin"] as const)
       },
     ];
     const grants: Record<string, unknown>[] = [];
+    const staff: Record<string, unknown>[] = [];
     await page.route(url + "/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data: unknown = {};
@@ -69,7 +70,19 @@ for (const role of ["teacher", "superadmin"] as const)
       else if (path.endsWith("/user")) data = user;
       else if (path.endsWith("/my_profile"))
         data = { id: user.id, role, full_name: "Преподаватель", active: true };
-      else if (path.endsWith("/admin_data"))
+      else if (path.endsWith("/superadmin_teachers")) data = staff;
+      else if (path.endsWith("/manage-account")) {
+        const body = route.request().postDataJSON();
+        requests.push(body);
+        staff.push({
+          id: "new-teacher",
+          full_name: body.full_name,
+          email: body.email,
+          role: "teacher",
+          active: true,
+        });
+        data = { id: "new-teacher" };
+      } else if (path.endsWith("/admin_data"))
         data = {
           actor_role: role,
           modules: [exam],
@@ -145,6 +158,38 @@ for (const role of ["teacher", "superadmin"] as const)
         { exact: true },
       ),
     ).toBeVisible();
+    await expect(page.locator(".role-badge")).toHaveText(
+      role === "superadmin" ? "Суперадмин" : "Преподаватель",
+    );
+    if (role === "superadmin") {
+      await page
+        .getByRole("button", { name: "Преподаватели", exact: true })
+        .click();
+      await page
+        .getByLabel("ФИО преподавателя", { exact: true })
+        .fill("Новый преподаватель");
+      await page
+        .getByLabel("Email преподавателя", { exact: true })
+        .fill("newteacher@example.com");
+      await page
+        .getByLabel("Пароль преподавателя", { exact: true })
+        .fill("12345678");
+      await page
+        .getByRole("button", { name: "Создать преподавателя", exact: true })
+        .click();
+      await expect(
+        page.getByRole("cell", { name: "newteacher@example.com", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByLabel("Пароль преподавателя", { exact: true }),
+      ).toHaveValue("");
+      const created = requests.find((r) => r.action === "create-teacher");
+      expect(created?.password).toBe("12345678");
+      expect(created).not.toHaveProperty("role");
+    } else
+      await expect(
+        page.getByRole("button", { name: "Преподаватели", exact: true }),
+      ).toHaveCount(0);
     await page.getByRole("button", { name: "Результаты", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Экзамен", exact: true })

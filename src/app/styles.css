@@ -176,6 +176,21 @@ p {
   align-items: center;
   font-size: 12px;
 }
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  color: #3654b5;
+  background: #edf1ff;
+  font-weight: 800;
+}
+.role-badge.superadmin {
+  color: #6d36b5;
+  background: #f1eaff;
+}
 .identity span {
   max-width: 250px;
   overflow: hidden;

@@ -77,6 +77,15 @@ function App() {
         </a>
         <div className="identity">
           <span>{profile.data?.full_name}</span>
+          {profile.data?.role && (
+            <b className={`role-badge ${profile.data.role}`}>
+              {profile.data.role === "superadmin"
+                ? "Суперадмин"
+                : profile.data.role === "teacher"
+                  ? "Преподаватель"
+                  : "Студент"}
+            </b>
+          )}
           <button
             className="ghost"
             onClick={() => void supabase.auth.signOut()}

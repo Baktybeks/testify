@@ -6,7 +6,7 @@ test("catalog upgrade preserves existing exams, questions, attempts and publishe
   const db = new PGlite();
   try {
     await db.exec(
-      `create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`,
+      `create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,created_at timestamptz default clock_timestamp());create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`,
     );
     const files = (await readdir("supabase/migrations"))
       .filter((f) => f.endsWith(".sql"))
