@@ -15,6 +15,11 @@ type Command = {
   key: string;
 };
 export function StudentPage({ user }: { user: string }) {
+  const history = useQuery({
+    queryKey: ["exam-history", user],
+    queryFn: () => rpc<Module[]>("student_exam_history"),
+    refetchInterval: 15000,
+  });
   const modules = useQuery({
     queryKey: ["modules", user],
     queryFn: () => rpc<Module[]>("student_modules"),
@@ -245,6 +250,42 @@ export function StudentPage({ user }: { user: string }) {
               ))}
           </div>
         )}
+        <details className="card student-accordion">
+          <summary>История экзаменов</summary>
+          {history.isPending ? (
+            <p>Загружаем историю…</p>
+          ) : history.error ? (
+            <p className="alert">{history.error.message}</p>
+          ) : !history.data?.length ? (
+            <p className="muted">Завершённых экзаменов пока нет.</p>
+          ) : (
+            history.data
+              .filter((m) => !subjectId || m.subject_id === subjectId)
+              .map((m) => (
+                <div className="module-row" key={m.id}>
+                  <div>
+                    <p className="eyebrow">
+                      {m.subject_name} · {m.course_module_title}
+                    </p>
+                    <b>{m.title}</b>
+                  </div>
+                  <button
+                    className="secondary"
+                    disabled={pending}
+                    onClick={() =>
+                      void execute(() =>
+                        rpc<Current>("attempt_current", {
+                          p_attempt_id: m.attempt_id,
+                        }),
+                      )
+                    }
+                  >
+                    Посмотреть результат
+                  </button>
+                </div>
+              ))
+          )}
+        </details>
       </main>
     );
   return (
@@ -300,6 +341,7 @@ export function StudentPage({ user }: { user: string }) {
               setCurrent(null);
               command.current = null;
               void modules.refetch();
+              void history.refetch();
             }}
           >
             К списку экзаменов

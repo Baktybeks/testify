@@ -21,6 +21,66 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("module bank works without exams, is shared by exam copies and survives exam deletion", async () => {
+  await as(teacher);
+  const catalog = await call("admin_data");
+  const { course_module_id: cid } = await command("save_course_module", {
+    subject_id: catalog.subjects[0].id,
+    title: "Standalone bank",
+    position: 2,
+  });
+  const q = {
+    external_id: "BANK1",
+    lecture: "1",
+    text: "Shared question",
+    options: ["a", "b", "c", "d"],
+    correct: 0,
+  };
+  await call("admin_bank_command", ["save_questions", cid, { questions: [q] }]);
+  assert.equal((await call("admin_course_questions", [cid])).length, 1);
+  const config = {
+    title: "Bank exam",
+    course_module_id: cid,
+    question_count: 1,
+    seconds_per_question: 30,
+    total_seconds: 60,
+    max_score: 10,
+    selection_mode: "random",
+    quotas: {},
+  };
+  const { module_id: exam } = await command("save_module", config);
+  const { module_id: copy } = await command("copy_module", { module_id: exam });
+  assert.equal((await call("admin_questions", [copy])).length, 1);
+  await call("admin_bank_command", [
+    "save_questions",
+    cid,
+    { questions: [{ ...q, text: "Updated shared question" }] },
+  ]);
+  assert.equal(
+    (await call("admin_questions", [exam]))[0].text,
+    "Updated shared question",
+  );
+  assert.equal(
+    (await call("admin_questions", [copy]))[0].text,
+    "Updated shared question",
+  );
+  await call("admin_delete_unused_exam", [exam, config.title]);
+  assert.equal((await call("admin_course_questions", [cid])).length, 1);
+  await as(student);
+  await assert.rejects(
+    () => call("admin_course_questions", [cid]),
+    /преподавателя/,
+  );
+  await assert.rejects(
+    () =>
+      call("admin_bank_command", [
+        "delete_question",
+        cid,
+        { id: crypto.randomUUID() },
+      ]),
+    /преподавателя/,
+  );
+});
 test("unused exam deletion checks role, title, state and retained history", async () => {
   const mid = await module();
   await as(student);
@@ -54,7 +114,14 @@ test("unused exam deletion checks role, title, state and retained history", asyn
   await db.query("delete from exam_private.attempt_slots where module_id=$1", [
     mid,
   ]);
+  const cid = (
+    await db.query(
+      "select course_module_id from exam_private.modules where id=$1",
+      [mid],
+    )
+  ).rows[0].course_module_id;
   await call("admin_delete_unused_exam", [mid, title]);
+  assert.equal((await call("admin_course_questions", [cid])).length, 90);
   assert.equal(
     (
       await db.query(
@@ -364,7 +431,7 @@ test("opening selected groups is atomic, preserves windows and rejects invalid a
     /не найдена/,
   );
   await db.query(
-    "update exam_private.questions set active=false where module_id=$1",
+    "update exam_private.questions set active=false where course_module_id=(select course_module_id from exam_private.modules where id=$1)",
     [id],
   );
   await assert.rejects(
@@ -387,7 +454,7 @@ test("opening selected groups is atomic, preserves windows and rejects invalid a
     "closed",
   );
   await db.query(
-    "update exam_private.questions set active=true where module_id=$1",
+    "update exam_private.questions set active=true where course_module_id=(select course_module_id from exam_private.modules where id=$1)",
     [id],
   );
   const future = "2099-01-01T00:00:00.000Z";
@@ -444,20 +511,20 @@ test("opening selected groups is atomic, preserves windows and rejects invalid a
     /истекло/,
   );
 });
-test("subject catalog: independent modules, bank copies and role boundaries", async () => {
+test("subject catalog: independent modules, banks and role boundaries", async () => {
   await as(teacher);
   const catalog = await call("admin_data");
   assert.equal(catalog.subjects.length, 2);
-  assert.equal(catalog.course_modules.length, 4);
+  assert.ok(catalog.course_modules.length >= 4);
   const web = catalog.subjects.find((s) => s.name === "Web-разработка"),
     ux = catalog.subjects.find((s) => s.name === "UX/UI");
   const web1 = catalog.course_modules.find(
-      (c) => c.subject_id === web.id && c.position === 1,
+      (c) => c.subject_id === web.id && c.title === "Модуль 1",
     ),
     ux2 = catalog.course_modules.find(
-      (c) => c.subject_id === ux.id && c.position === 2,
+      (c) => c.subject_id === ux.id && c.title === "Модуль 2",
     );
-  const source = await module();
+  const source = await module(20, "random", {}, web1.id);
   await as(teacher);
   const { module_id: copy } = await command("copy_module", {
     module_id: source,
@@ -469,7 +536,7 @@ test("subject catalog: independent modules, bank copies and role boundaries", as
     web1.id,
   );
   assert.equal(data.modules.find((m) => m.id === copy).subject_name, "UX/UI");
-  assert.equal((await call("admin_questions", [copy])).length, 90);
+  assert.equal((await call("admin_questions", [copy])).length, 0);
   await command("save_questions", {
     module_id: copy,
     questions: [
@@ -527,9 +594,25 @@ async function call(name, args = []) {
 async function command(action, data) {
   return call("admin_command", [action, JSON.stringify(data)]);
 }
-async function module(count = 20, mode = "random", quotas = {}) {
+async function module(
+  count = 20,
+  mode = "random",
+  quotas = {},
+  courseId = null,
+) {
   await as(teacher);
+  if (!courseId) {
+    const subject = (await call("admin_data")).subjects[0];
+    courseId = (
+      await command("save_course_module", {
+        subject_id: subject.id,
+        title: "Isolated " + crypto.randomUUID(),
+        position: 1,
+      })
+    ).course_module_id;
+  }
   const { module_id: id } = await command("save_module", {
+    course_module_id: courseId,
     title: "Test",
     question_count: count,
     seconds_per_question: 30,
@@ -605,7 +688,7 @@ test("start/resume, stable snapshots and secrecy; all 20 answers score once", as
   );
   // A bank edit cannot alter attempt snapshots (even if done outside the API).
   await db.query(
-    "update exam_private.questions set correct=(correct+1)%4 where module_id=$1",
+    "update exam_private.questions set correct=(correct+1)%4 where course_module_id=(select course_module_id from exam_private.modules where id=$1)",
     [id],
   );
   for (let i = 1; i < 20; i++)
@@ -692,7 +775,7 @@ test("closing stops new starts, allows existing attempts, prevents early publica
     a.attempt_id,
   );
 });
-test("quota selection exact, insufficient topic blocks opening, copies are independent", async () => {
+test("quota selection exact, insufficient topic blocks opening, copies share their module bank", async () => {
   const quotas = { 1: 3, 2: 3, 3: 3, 4: 3, 5: 2, 6: 3, 7: 3 };
   const id = await module(20, "quotas", quotas);
   await as(student);
@@ -716,7 +799,7 @@ test("quota selection exact, insufficient topic blocks opening, copies are indep
     access: true,
   });
   await db.query(
-    `update exam_private.questions set active=false where module_id=$1 and lecture='7'`,
+    `update exam_private.questions set active=false where course_module_id=(select course_module_id from exam_private.modules where id=$1) and lecture='7'`,
     [copy],
   );
   await assert.rejects(

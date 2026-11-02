@@ -32,6 +32,19 @@ test("catalog upgrade preserves existing exams, questions, attempts and publishe
         `insert into exam_private.questions(module_id,external_id,lecture,text,options,correct) values($1,$2,'1',$3,'["a","b","c","d"]',0)`,
         [mid, "Q" + i, "Existing question " + i],
       );
+    const duplicate = (
+      await db.query(
+        "insert into exam_private.modules(title,status) values('Duplicate','draft') returning id",
+      )
+    ).rows[0].id;
+    await db.query(
+      "insert into exam_private.questions(module_id,external_id,lecture,text,options,correct) select $1,external_id,lecture,text,options,correct from exam_private.questions where module_id=$2",
+      [duplicate, mid],
+    );
+    await db.query(
+      "update exam_private.questions set text='Divergent version' where module_id=$1 and external_id='Q1'",
+      [duplicate],
+    );
     await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [
       uid,
     ]);
@@ -80,12 +93,22 @@ test("catalog upgrade preserves existing exams, questions, attempts and publishe
     assert.equal(
       (
         await db.query(
-          "select count(*)::int n from exam_private.questions where module_id=$1",
+          "select count(*)::int n from exam_private.questions where course_module_id=(select course_module_id from exam_private.modules where id=$1)",
           [mid],
         )
       ).rows[0].n,
-      2,
+      3,
     );
+    const catalog = (await db.query("select public.student_modules() data"))
+      .rows[0].data;
+    assert.equal(
+      catalog.some((m) => m.id === mid),
+      false,
+    );
+    const history = (
+      await db.query("select public.student_exam_history() data")
+    ).rows[0].data;
+    assert.equal(history.find((m) => m.id === mid).attempt_id, aid);
   } finally {
     await db.close();
   }

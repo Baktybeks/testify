@@ -59,6 +59,18 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
         full_name: "Тестовый студент",
         active: true,
       };
+    else if (p.endsWith("/student_exam_history"))
+      data = [
+        {
+          id: "old-exam",
+          title: "Архивный экзамен",
+          status: "archived",
+          attempt_id: "old-attempt",
+          subject_id: "web",
+          subject_name: "Web-разработка",
+          course_module_title: "Модуль 1",
+        },
+      ];
     else if (p.endsWith("/student_modules"))
       data = [
         {
@@ -100,6 +112,21 @@ test("mobile login, answer, reload/resume, hidden and published results", async 
   await page.getByLabel("Логин", { exact: true }).fill("student");
   await page.getByLabel("Пароль", { exact: true }).fill("individual-secret");
   await page.getByRole("button", { name: "Войти и продолжить" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Архивный экзамен" }),
+  ).toHaveCount(0);
+  await page.getByText("История экзаменов", { exact: true }).click();
+  const history = page
+    .locator("details")
+    .filter({
+      has: page
+        .locator("summary")
+        .getByText("История экзаменов", { exact: true }),
+    });
+  await expect(history).toContainText("Архивный экзамен");
+  await expect(
+    history.getByRole("button", { name: "Посмотреть результат" }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "Начать экзамен" }).click();
   await expect(
     page.getByRole("heading", { name: "Какой тег задаёт заголовок?" }),

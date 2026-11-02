@@ -89,9 +89,12 @@ export function TeacherPage({
     refetchInterval: tab === "Обзор" ? 15000 : false,
   });
   const bank = useQuery({
-    queryKey: ["bank", user, mid],
-    queryFn: () => rpc<Question[]>("admin_questions", { p_module_id: mid }),
-    enabled: !!mid && tab === "Вопросы",
+    queryKey: ["bank", user, courseModuleId],
+    queryFn: () =>
+      rpc<Question[]>("admin_course_questions", {
+        p_course_module_id: courseModuleId,
+      }),
+    enabled: !!courseModuleId && tab === "Вопросы",
   });
   async function run(
     fn: () => Promise<unknown>,
@@ -371,25 +374,27 @@ export function TeacherPage({
                 ))}
             </select>
           </label>
-          <label>
-            Экзамен
-            <select
-              aria-label="Экзамен"
-              value={mid}
-              onChange={(e) => {
-                setMid(e.target.value);
-                setPreview([]);
-                setQuestion(blankQuestion);
-              }}
-            >
-              <option value="">Все экзамены</option>
-              {d.modules.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.title} · {status[m.status]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {tab !== "Вопросы" && (
+            <label>
+              Экзамен
+              <select
+                aria-label="Экзамен"
+                value={mid}
+                onChange={(e) => {
+                  setMid(e.target.value);
+                  setPreview([]);
+                  setQuestion(blankQuestion);
+                }}
+              >
+                <option value="">Все экзамены</option>
+                {d.modules.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.title} · {status[m.status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Группа
             <select value={gid} onChange={(e) => setGid(e.target.value)}>
@@ -669,7 +674,7 @@ export function TeacherPage({
                     disabled={busy}
                     onClick={() => {
                       const title = prompt(
-                        `Удалить черновик «${m.title}» и его банк вопросов? Введите название экзамена для подтверждения. Экзамен с историей попыток удалить нельзя.`,
+                        `Удалить черновик «${m.title}»? Банк вопросов учебного модуля сохранится. Введите название экзамена для подтверждения. Экзамен с историей попыток удалить нельзя.`,
                       );
                       if (title === null) return;
                       void run(async () => {
@@ -1145,28 +1150,36 @@ export function TeacherPage({
         </>
       )}
       {tab === "Вопросы" &&
-        (!mid ? (
+        (!courseModuleId ? (
           <section className="card empty">
-            Выберите экзамен для работы с его банком вопросов.
+            Выберите дисциплину и учебный модуль для работы с банком вопросов.
           </section>
         ) : (
           <>
             <section className="card">
               <h2>Банк вопросов · {bank.data?.length || 0}</h2>
               <p className="eyebrow">
-                {selected?.subject_name} → {selected?.course_module_title} →{" "}
-                {selected?.title}
+                {
+                  subjects.find(
+                    (s) =>
+                      s.id ===
+                      courseModules.find((c) => c.id === courseModuleId)
+                        ?.subject_id,
+                  )?.name
+                }{" "}
+                → {courseModules.find((c) => c.id === courseModuleId)?.title}
               </p>
               <p className="muted">
-                Размер банка произвольный. Изменения доступны в черновике; для
-                следующей партии скопируйте экзамен.
+                Общий банк учебного модуля для всех его экзаменов. Изменения
+                применяются к новым попыткам; начатые попытки сохраняют свои
+                вопросы. Удаление экзамена сохраняет этот банк.
               </p>
               <label>
                 Импорт CSV / XLSX (лист Questions)
                 <input
                   type="file"
                   accept=".csv,.xlsx"
-                  disabled={selected?.status !== "draft" || busy}
+                  disabled={busy}
                   onChange={(e) => {
                     if (e.target.files?.[0])
                       void inspect(e.target.files[0], "Questions");
@@ -1205,9 +1218,12 @@ export function TeacherPage({
                     disabled={busy || !!issues.length}
                     onClick={() =>
                       void run(async () => {
-                        await command("save_questions", {
-                          module_id: mid,
-                          questions: preview,
+                        await rpc("admin_bank_command", {
+                          p_action: "save_questions",
+                          p_course_module_id: courseModuleId,
+                          p_data: {
+                            questions: preview,
+                          },
                         });
                         setPreview([]);
                       })
@@ -1224,15 +1240,16 @@ export function TeacherPage({
                 onSubmit={(e) => {
                   e.preventDefault();
                   void run(async () => {
-                    await command("save_questions", {
-                      module_id: mid,
-                      questions: [question],
+                    await rpc("admin_bank_command", {
+                      p_action: "save_questions",
+                      p_course_module_id: courseModuleId,
+                      p_data: { questions: [question] },
                     });
                     setQuestion(blankQuestion);
                   });
                 }}
               >
-                <fieldset disabled={busy || selected?.status !== "draft"}>
+                <fieldset disabled={busy}>
                   <div className="fields">
                     <label>
                       QuestionID
@@ -1346,7 +1363,7 @@ export function TeacherPage({
                   <div className="toolbar">
                     <button
                       className="secondary"
-                      disabled={selected?.status !== "draft"}
+                      disabled={busy}
                       onClick={() => {
                         setQuestion(q);
                         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1356,13 +1373,14 @@ export function TeacherPage({
                     </button>
                     <button
                       className="ghost"
-                      disabled={busy || selected?.status !== "draft"}
+                      disabled={busy}
                       onClick={() => {
                         if (confirm("Удалить вопрос?"))
                           void run(() =>
-                            command("delete_question", {
-                              module_id: mid,
-                              id: q.id,
+                            rpc("admin_bank_command", {
+                              p_action: "delete_question",
+                              p_course_module_id: courseModuleId,
+                              p_data: { id: q.id },
                             }),
                           );
                       }}

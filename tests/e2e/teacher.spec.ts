@@ -82,7 +82,11 @@ test("teacher dashboard, module settings and validated CSV import", async ({
           average: null,
         },
       };
-    else if (path.endsWith("/admin_questions")) data = [];
+    else if (
+      path.endsWith("/admin_questions") ||
+      path.endsWith("/admin_course_questions")
+    )
+      data = [];
     else if (path.endsWith("/admin_open_exam_groups")) {
       const body = route.request().postDataJSON();
       commands.push({ p_action: "open_exam_groups", p_data: body });
@@ -101,7 +105,10 @@ test("teacher dashboard, module settings and validated CSV import", async ({
         p_data: route.request().postDataJSON(),
       });
       data = { deleted: true };
-    } else if (path.endsWith("/admin_command")) {
+    } else if (
+      path.endsWith("/admin_command") ||
+      path.endsWith("/admin_bank_command")
+    ) {
       commands.push(route.request().postDataJSON());
       data = { ok: true, module_id: "m1" };
     } else if (path.endsWith("/manage-account")) {
@@ -159,8 +166,11 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     .toBeTruthy();
   await page.getByRole("button", { name: "Вопросы", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "Экзамен", exact: true })
-    .selectOption("m1");
+    .getByRole("combobox", { name: "Модуль", exact: true })
+    .selectOption("web1");
+  await expect(
+    page.getByRole("combobox", { name: "Экзамен", exact: true }),
+  ).toHaveCount(0);
   const input = page.getByLabel("Импорт CSV / XLSX (лист Questions)");
   await input.setInputFiles({
     name: "questions.csv",
@@ -215,11 +225,9 @@ test("teacher dashboard, module settings and validated CSV import", async ({
   ).toHaveValue("");
   await expect(page.getByText("Уже существует — пропущен")).toBeVisible();
   await page.getByText("Новый студент", { exact: true }).click();
-  const manual = page
-    .locator("details")
-    .filter({
-      has: page.locator("summary").getByText("Новый студент", { exact: true }),
-    });
+  const manual = page.locator("details").filter({
+    has: page.locator("summary").getByText("Новый студент", { exact: true }),
+  });
   await expect(manual.getByLabel("StudentID", { exact: true })).toHaveCount(0);
   await manual.getByLabel("ФИО", { exact: true }).fill("Новый студент");
   await manual.getByLabel("Логин", { exact: true }).fill("manual_student");
