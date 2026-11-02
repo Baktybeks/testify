@@ -243,6 +243,22 @@ paths:
             or the previous response for the same request key,
           }
         default: { $ref: "#/components/responses/Error" }
+  /rest/v1/rpc/admin_attempt_review:
+    post:
+      operationId: adminAttemptReview
+      description: Teacher/superadmin-only immutable attempt snapshots with selected and correct options. Denied to students.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_attempt_id]
+              properties:
+                p_attempt_id: { type: string, format: uuid }
+      responses:
+        "200": { description: Ordered array with position, text, options, correct_id, selected_id, correct, received_at }
+        default: { $ref: "#/components/responses/Error" }
   /rest/v1/rpc/admin_delete_exam_with_history:
     post:
       operationId: adminDeleteExamWithHistory

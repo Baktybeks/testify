@@ -884,3 +884,22 @@ td button {
 .student-accordion[open] > summary {
   margin-bottom: 20px;
 }
+.attempt-review-question {
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: normal;
+  min-width: 280px;
+}
+.attempt-review-question li {
+  padding: 6px 10px;
+  margin: 4px 0;
+  border-radius: 6px;
+}
+.review-correct {
+  background: #ecfdf3;
+  color: #166534;
+}
+.review-incorrect {
+  background: #fef2f2;
+  color: #991b1b;
+}

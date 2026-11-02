@@ -21,6 +21,55 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("answer review is staff-only and uses immutable attempt snapshots", async () => {
+  const mid = await module();
+  await as(student);
+  const a = await call("attempt_start_or_resume", [mid]);
+  const snapshots = (
+    await db.query(
+      "select * from exam_private.attempt_questions where attempt_id=$1 order by position",
+      [a.attempt_id],
+    )
+  ).rows;
+  await call("attempt_submit_answer", [
+    a.attempt_id,
+    1,
+    snapshots[0].correct_id,
+    crypto.randomUUID(),
+  ]);
+  await assert.rejects(
+    () => call("admin_attempt_review", [a.attempt_id]),
+    /преподавателя/,
+  );
+  await as(teacher);
+  const review = await call("admin_attempt_review", [a.attempt_id]);
+  assert.equal(review.length, 20);
+  assert.equal(review[0].selected_id, snapshots[0].correct_id);
+  assert.equal(review[0].correct, true);
+  assert.equal(review[1].selected_id, null);
+  await db.query(
+    "update exam_private.questions set text='Changed bank' where id=$1",
+    [snapshots[0].question_id],
+  );
+  assert.equal(
+    (await call("admin_attempt_review", [a.attempt_id]))[0].text,
+    snapshots[0].text,
+  );
+  await as(boss);
+  assert.equal((await call("admin_attempt_review", [a.attempt_id])).length, 20);
+  await assert.rejects(
+    () => call("admin_attempt_review", [crypto.randomUUID()]),
+    /не найдена/,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select has_function_privilege('anon','public.admin_attempt_review(uuid)','execute') ok",
+      )
+    ).rows[0].ok,
+    false,
+  );
+});
 test("full exam deletion requires superadmin, title and reason, removes history and retains the shared bank", async () => {
   const mid = await module();
   await as(student);

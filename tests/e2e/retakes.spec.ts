@@ -82,7 +82,31 @@ for (const role of ["teacher", "superadmin"] as const)
           active: true,
         });
         data = { id: "new-teacher" };
-      } else if (path.endsWith("/admin_data"))
+      } else if (path.endsWith("/admin_attempt_review"))
+        data = [
+          {
+            position: 1,
+            text: "Сохранённый вопрос",
+            options: [
+              { id: "o1", text: "Выбранный неверный вариант" },
+              { id: "o2", text: "Верный вариант" },
+            ],
+            selected_id: "o1",
+            correct_id: "o2",
+            correct: false,
+            received_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            position: 2,
+            text: "Пропущенный вопрос",
+            options: [{ id: "o3", text: "Другой вариант" }],
+            selected_id: null,
+            correct_id: "o3",
+            correct: false,
+            received_at: null,
+          },
+        ];
+      else if (path.endsWith("/admin_data"))
         data = {
           actor_role: role,
           modules: [exam],
@@ -204,6 +228,15 @@ for (const role of ["teacher", "superadmin"] as const)
       }),
     ).toHaveCount(role === "superadmin" ? 1 : 0);
     await page.getByRole("button", { name: "Результаты", exact: true }).click();
+    await page.getByRole("button", { name: /Показать ответы:/ }).click();
+    const review = page.getByRole("region", { name: "Ответы студента" });
+    await expect(review).toContainText(
+      "Выбранный неверный вариант — ответ студента",
+    );
+    await expect(review).toContainText("Верный вариант — правильный ответ");
+    await expect(review).toContainText("Нет ответа");
+    await page.getByRole("button", { name: /Скрыть ответы:/ }).click();
+    await expect(review).toHaveCount(0);
     await page
       .getByRole("combobox", { name: "Экзамен", exact: true })
       .selectOption("m1");

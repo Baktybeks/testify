@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { accountAction, rpc } from "../shared/api";
 import {
@@ -17,6 +17,7 @@ import {
 } from "../features/AttemptActionDialog";
 import { RetakeControls, RetakeHistory } from "../features/RetakeControls";
 import { TeacherAccounts } from "../features/TeacherAccounts";
+import { AttemptReview } from "../features/AttemptReview";
 const status: Record<string, string> = {
   draft: "Черновик",
   open: "Открыт",
@@ -59,6 +60,7 @@ export function TeacherPage({
   role?: "teacher" | "superadmin";
 }) {
   const cache = useQueryClient();
+  const [reviewId, setReviewId] = useState<string | null>(null);
   const [attemptAction, setAttemptAction] =
     useState<AttemptActionTarget | null>(null);
   const [tab, setTab] = useState("Обзор"),
@@ -1558,99 +1560,121 @@ export function TeacherPage({
               </thead>
               <tbody>
                 {d.attempts.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      {a.full_name}
-                      <small>Попытка №{a.attempt_number || 1}</small>
-                    </td>
-                    <td>
-                      {all.modules.find((m) => m.id === a.module_id)?.title}
-                      <small>
-                        {
-                          all.modules.find((m) => m.id === a.module_id)
-                            ?.subject_name
-                        }{" "}
-                        ·{" "}
-                        {
-                          all.modules.find((m) => m.id === a.module_id)
-                            ?.course_module_title
-                        }
-                      </small>
-                    </td>
-                    <td>{a.group_id}</td>
-                    <td>
-                      <span className="pill">{status[a.status]}</span>
-                      {a.void_reason && (
-                        <small className="reason-cell">
-                          {a.void_reason} · {a.voided_by_name}
-                        </small>
-                      )}
-                    </td>
-                    <td>
-                      {a.current_index} / {a.question_count}
-                    </td>
-                    <td>{date(a.started_at)}</td>
-                    <td>{a.correct_count ?? "—"}</td>
-                    <td>
-                      {a.is_current === false ? (
-                        <>
-                          <s>{a.score ?? "—"}</s>
-                          <small>Не учитывается</small>
-                        </>
-                      ) : (
-                        <b>{a.score ?? "—"}</b>
-                      )}
-                    </td>
-                    <td>
-                      <div className="toolbar">
-                        {a.is_current !== false &&
-                          !["draft", "archived"].includes(
+                  <Fragment key={a.id}>
+                    <tr>
+                      <td>
+                        <button
+                          className="ghost"
+                          aria-label={`${reviewId === a.id ? "Скрыть" : "Показать"} ответы: ${a.full_name}, попытка ${a.attempt_number || 1}`}
+                          aria-expanded={reviewId === a.id}
+                          aria-controls={`review-${a.id}`}
+                          onClick={() =>
+                            setReviewId(reviewId === a.id ? null : a.id)
+                          }
+                        >
+                          {reviewId === a.id ? "−" : "+"}
+                        </button>{" "}
+                        {a.full_name}
+                        <small>Попытка №{a.attempt_number || 1}</small>
+                      </td>
+                      <td>
+                        {all.modules.find((m) => m.id === a.module_id)?.title}
+                        <small>
+                          {
                             all.modules.find((m) => m.id === a.module_id)
-                              ?.status || "",
-                          ) &&
-                          (!all.modules.find((m) => m.id === a.module_id)
-                            ?.published_at ||
-                            superadmin) && (
-                            <button
-                              className="secondary"
-                              disabled={busy}
-                              onClick={() =>
-                                setAttemptAction(targetFor(a, "grant_retake"))
-                              }
-                            >
-                              Разрешить пересдачу
-                            </button>
-                          )}
-                        {superadmin &&
-                          a.is_current !== false &&
-                          a.status === "finished" &&
-                          !a.result_published_at &&
-                          all.modules.find((m) => m.id === a.module_id)
-                            ?.published_at && (
-                            <button
-                              className="secondary"
-                              disabled={busy}
-                              onClick={() =>
-                                setAttemptAction(targetFor(a, "publish_result"))
-                              }
-                            >
-                              Опубликовать результат
-                            </button>
-                          )}
-                        {superadmin && (
-                          <button
-                            className="danger"
-                            disabled={busy}
-                            onClick={() =>
-                              setAttemptAction(targetFor(a, "delete_attempt"))
-                            }
-                          >
-                            Удалить навсегда
-                          </button>
+                              ?.subject_name
+                          }{" "}
+                          ·{" "}
+                          {
+                            all.modules.find((m) => m.id === a.module_id)
+                              ?.course_module_title
+                          }
+                        </small>
+                      </td>
+                      <td>{a.group_id}</td>
+                      <td>
+                        <span className="pill">{status[a.status]}</span>
+                        {a.void_reason && (
+                          <small className="reason-cell">
+                            {a.void_reason} · {a.voided_by_name}
+                          </small>
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td>
+                        {a.current_index} / {a.question_count}
+                      </td>
+                      <td>{date(a.started_at)}</td>
+                      <td>{a.correct_count ?? "—"}</td>
+                      <td>
+                        {a.is_current === false ? (
+                          <>
+                            <s>{a.score ?? "—"}</s>
+                            <small>Не учитывается</small>
+                          </>
+                        ) : (
+                          <b>{a.score ?? "—"}</b>
+                        )}
+                      </td>
+                      <td>
+                        <div className="toolbar">
+                          {a.is_current !== false &&
+                            !["draft", "archived"].includes(
+                              all.modules.find((m) => m.id === a.module_id)
+                                ?.status || "",
+                            ) &&
+                            (!all.modules.find((m) => m.id === a.module_id)
+                              ?.published_at ||
+                              superadmin) && (
+                              <button
+                                className="secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                  setAttemptAction(targetFor(a, "grant_retake"))
+                                }
+                              >
+                                Разрешить пересдачу
+                              </button>
+                            )}
+                          {superadmin &&
+                            a.is_current !== false &&
+                            a.status === "finished" &&
+                            !a.result_published_at &&
+                            all.modules.find((m) => m.id === a.module_id)
+                              ?.published_at && (
+                              <button
+                                className="secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                  setAttemptAction(
+                                    targetFor(a, "publish_result"),
+                                  )
+                                }
+                              >
+                                Опубликовать результат
+                              </button>
+                            )}
+                          {superadmin && (
+                            <button
+                              className="danger"
+                              disabled={busy}
+                              onClick={() =>
+                                setAttemptAction(targetFor(a, "delete_attempt"))
+                              }
+                            >
+                              Удалить навсегда
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {reviewId === a.id && (
+                      <tr id={`review-${a.id}`}>
+                        <td colSpan={9}>
+                          <AttemptReview user={user} attemptId={a.id} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
