@@ -21,6 +21,50 @@ before(async () => {
   );
 });
 after(async () => await db?.close());
+test("manual questions get unique automatic IDs; explicit IDs still update the same question", async () => {
+  const mid = await module();
+  await as(teacher);
+  const cid = (
+    await db.query(
+      "select course_module_id from exam_private.modules where id=$1",
+      [mid],
+    )
+  ).rows[0].course_module_id;
+  const q = {
+    lecture: "Auto",
+    text: "Automatic ID question",
+    options: ["a", "b", "c", "d"],
+    correct: 1,
+  };
+  await call("admin_bank_command", [
+    "save_questions",
+    cid,
+    { questions: [q, { ...q, external_id: "" }] },
+  ]);
+  const added = (await call("admin_course_questions", [cid])).filter(
+    (q) => q.lecture === "Auto",
+  );
+  assert.equal(added.length, 2);
+  assert.notEqual(added[0].external_id, added[1].external_id);
+  assert.match(added[0].external_id, /^Q-/);
+  await call("admin_bank_command", [
+    "save_questions",
+    cid,
+    {
+      questions: [
+        { ...q, external_id: added[0].external_id, text: "Edited question" },
+      ],
+    },
+  ]);
+  const edited = (await call("admin_course_questions", [cid])).filter(
+    (q) => q.lecture === "Auto",
+  );
+  assert.equal(edited.length, 2);
+  assert.equal(
+    edited.find((q) => q.id === added[0].id).text,
+    "Edited question",
+  );
+});
 test("answer review is staff-only and uses immutable attempt snapshots", async () => {
   const mid = await module();
   await as(student);

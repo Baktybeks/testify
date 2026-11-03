@@ -1316,19 +1316,6 @@ export function TeacherPage({
                 <fieldset disabled={busy}>
                   <div className="fields">
                     <label>
-                      QuestionID
-                      <input
-                        required
-                        value={question.external_id}
-                        onChange={(e) =>
-                          setQuestion({
-                            ...question,
-                            external_id: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
                       Тема / лекция
                       <input
                         required
