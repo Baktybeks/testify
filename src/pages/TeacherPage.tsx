@@ -60,6 +60,7 @@ export function TeacherPage({
   role?: "teacher" | "superadmin";
 }) {
   const cache = useQueryClient();
+  const [updateQuestions, setUpdateQuestions] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [attemptAction, setAttemptAction] =
     useState<AttemptActionTarget | null>(null);
@@ -144,7 +145,7 @@ export function TeacherPage({
     try {
       const rows = await readRows(file, kind);
       if (kind === "Questions") {
-        const p = validateQuestions(rows);
+        const p = validateQuestions(rows, updateQuestions);
         setPreview(p.questions);
         setIssues(p.errors);
       } else if (kind === "Students") {
@@ -1238,6 +1239,23 @@ export function TeacherPage({
                 применяются к новым попыткам; начатые попытки сохраняют свои
                 вопросы. Удаление экзамена сохраняет этот банк.
               </p>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={updateQuestions}
+                  disabled={busy}
+                  onChange={(e) => {
+                    setUpdateQuestions(e.target.checked);
+                    setPreview([]);
+                    setIssues([]);
+                  }}
+                />
+                Обновить существующие вопросы по QuestionID
+              </label>
+              <p className="muted">
+                По умолчанию QuestionID не нужен и игнорируется. Для обновления
+                включите флажок и заново выберите файл.
+              </p>
               <label>
                 Импорт CSV / XLSX (лист Questions)
                 <input
@@ -1254,8 +1272,10 @@ export function TeacherPage({
               {preview.length > 0 && (
                 <>
                   <p>
-                    Проверено вопросов: {preview.length}. Совпадающие QuestionID
-                    будут обновлены.
+                    Проверено вопросов: {preview.length}.{" "}
+                    {updateQuestions
+                      ? "Совпадающие QuestionID будут обновлены."
+                      : "Будут созданы новые вопросы с автоматическими ID. Повторный импорт создаст новые записи."}
                   </p>
                   <div className="tablewrap">
                     <table>
@@ -1269,7 +1289,7 @@ export function TeacherPage({
                       <tbody>
                         {preview.slice(0, 10).map((q, i) => (
                           <tr key={i}>
-                            <td>{q.external_id}</td>
+                            <td>{q.external_id || "Автоматически"}</td>
                             <td>{q.lecture}</td>
                             <td>{q.text}</td>
                           </tr>

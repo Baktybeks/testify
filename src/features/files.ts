@@ -46,7 +46,10 @@ export async function readRows(
       Object.fromEntries(headers.map((h, i) => [h.trim(), r[i]?.trim() || ""])),
     );
 }
-export function validateQuestions(rows: Record<string, string>[]): {
+export function validateQuestions(
+  rows: Record<string, string>[],
+  updateExisting = false,
+): {
   questions: Question[];
   errors: string[];
 } {
@@ -55,7 +58,7 @@ export function validateQuestions(rows: Record<string, string>[]): {
   const questions = rows.map((r, i) => {
     const options = [r.OptionA, r.OptionB, r.OptionC, r.OptionD];
     const correct = "ABCD".indexOf(r.CorrectOption?.toUpperCase());
-    if (!r.QuestionID || seen.has(r.QuestionID))
+    if (updateExisting && (!r.QuestionID || seen.has(r.QuestionID)))
       errors.push(`Строка ${i + 2}: пустой или повторный QuestionID`);
     seen.add(r.QuestionID);
     if (
@@ -70,7 +73,7 @@ export function validateQuestions(rows: Record<string, string>[]): {
         `Строка ${i + 2}: проверьте текст, тему, четыре разных варианта и CorrectOption A–D`,
       );
     return {
-      external_id: r.QuestionID,
+      external_id: updateExisting ? r.QuestionID : "",
       lecture: r.Lecture,
       difficulty: r.Difficulty || "normal",
       text: r.Question,

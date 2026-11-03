@@ -176,13 +176,20 @@ test("teacher dashboard, module settings and validated CSV import", async ({
     name: "questions.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(
-      "QuestionID,Lecture,Question,OptionA,OptionB,OptionC,OptionD,CorrectOption\nQ1,HTML,Заголовок?,h1,head,title,header,A",
+      "Lecture,Question,OptionA,OptionB,OptionC,OptionD,CorrectOption\nHTML,Заголовок?,h1,head,title,header,A",
     ),
   });
   await expect(page.getByText("Проверено вопросов: 1.")).toBeVisible();
   await page.getByRole("button", { name: "Импортировать 1 вопросов" }).click();
   await expect(page.getByText("Изменения сохранены")).toBeVisible();
   expect(commands.some((c) => c.p_action === "save_questions")).toBeTruthy();
+  expect(
+    (
+      commands.find((c) => c.p_action === "save_questions")?.p_data as {
+        questions: { external_id: string }[];
+      }
+    ).questions[0].external_id,
+  ).toBe("");
   await input.setInputFiles({
     name: "bad.csv",
     mimeType: "text/csv",
@@ -289,15 +296,13 @@ test("teacher dashboard, module settings and validated CSV import", async ({
   ).toEqual(["G1"]);
   await page.getByRole("button", { name: "Студенты", exact: true }).click();
   await page.getByText("Массовый импорт", { exact: true }).click();
-  await page
-    .getByLabel("Импорт студентов", { exact: true })
-    .setInputFiles({
-      name: "students.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(
-        "StudentID,FullName,GroupID,Login,Status,Password\nimport_student,Импорт Студент,G1,import_student,active,12345678",
-      ),
-    });
+  await page.getByLabel("Импорт студентов", { exact: true }).setInputFiles({
+    name: "students.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "StudentID,FullName,GroupID,Login,Status,Password\nimport_student,Импорт Студент,G1,import_student,active,12345678",
+    ),
+  });
   await page
     .getByRole("button", { name: "Создать аккаунты", exact: true })
     .click();
